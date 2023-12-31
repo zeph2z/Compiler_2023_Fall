@@ -42,6 +42,15 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 "/"             { yylval.char_val = '/'; return DIVIDE; }
 "%"             { yylval.char_val = '%'; return MOD; }
 
+"&&"            { yylval.str_val = new string("&&"); return AND; }
+"||"            { yylval.str_val = new string("||"); return OR; }
+"<"             { yylval.str_val = new string("<"); return LT; }
+"<="            { yylval.str_val = new string("<="); return LE; }
+">"             { yylval.str_val = new string(">"); return GT; }
+">="            { yylval.str_val = new string(">="); return GE; }
+"=="            { yylval.str_val = new string("=="); return EQ; }
+"!="            { yylval.str_val = new string("!="); return NE; }
+
 .               { return yytext[0]; }
 
 %%

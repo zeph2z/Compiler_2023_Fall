@@ -31,10 +31,12 @@ using namespace std;
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 %token <char_val> PLUS MINUS NOT TIMES DIVIDE MOD
+%token <str_val> LT GT LE GE EQ NE AND OR
 
-%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp
+%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp LOrExp LAndExp EqExp RelExp
 %type <int_val> Number
 %type <char_val> UnaryOp AddOp MulOp
+%type <str_val> RelOp EqOp
 
 %%
 
@@ -82,9 +84,9 @@ Stmt
   ;
 
 Exp
-  : AddExp {
+  : LOrExp {
     auto ast = new ExpAST();
-    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->lor_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
 
@@ -149,6 +151,68 @@ AddExp
     $$ = ast;
   }
 
+RelExp
+  : AddExp {
+    auto ast = new RelExpAST();
+    ast->type = 0;
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | RelExp RelOp AddExp {
+    auto ast = new RelExpAST();
+    ast->op = *$2;
+    ast->type = 1;
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
+EqExp
+  : RelExp {
+    auto ast = new EqExpAST();
+    ast->type = 0;
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | EqExp EqOp RelExp {
+    auto ast = new EqExpAST();
+    ast->op = *$2;
+    ast->type = 1;
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->rel_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
+LAndExp
+  : EqExp {
+    auto ast = new LAndExpAST();
+    ast->type = 0;
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LAndExp AND EqExp {
+    auto ast = new LAndExpAST();
+    ast->type = 1;
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    ast->eq_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
+LOrExp
+  : LAndExp {
+    auto ast = new LOrExpAST();
+    ast->type = 0;
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LOrExp OR LAndExp {
+    auto ast = new LOrExpAST();
+    ast->type = 1;
+    ast->lor_exp = unique_ptr<BaseAST>($1);
+    ast->land_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+
 Number
   : INT_CONST {
     $$ = $1;
@@ -166,6 +230,16 @@ AddOp
 
 MulOp
   : TIMES | DIVIDE | MOD {
+    $$ = $1;
+  }
+
+RelOp
+  : LT | GT | LE | GE {
+    $$ = $1;
+  }
+
+EqOp
+  : EQ | NE {
     $$ = $1;
   }
 

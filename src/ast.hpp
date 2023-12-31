@@ -108,16 +108,16 @@ class StmtAST : public BaseAST {
 // Exp ::= AddExp;
 class ExpAST : public BaseAST {
     public:
-        std::unique_ptr<BaseAST> add_exp;
+        std::unique_ptr<BaseAST> lor_exp;
 
         void Dump() const override {
             std::cout << "ExpAST { ";
-            add_exp->Dump();
+            lor_exp->Dump();
             std::cout << " }";
         }
         void Generate() override {
-            add_exp->Generate();
-            label = add_exp->label;
+            lor_exp->Generate();
+            label = lor_exp->label;
         }
 };
 
@@ -286,11 +286,189 @@ class MulExpAST : public BaseAST {
                         break;
                     }
                     case '%' : {
-                        // %1 = rem %0, %2
-                        kstr += "    " + label + " = rem " + mul_exp->label + ", " + unary_exp->label + "\n";
+                        // %1 = mod %0, %2
+                        kstr += "    " + label + " = mod " + mul_exp->label + ", " + unary_exp->label + "\n";
                         break;
                     }
                 }
+            }
+        }
+};
+
+// RelExp ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+class RelExpAST : public BaseAST {
+    public:
+        int type;
+        std::string op;
+        std::unique_ptr<BaseAST> add_exp;
+        std::unique_ptr<BaseAST> rel_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "RelExpAST { ";
+                add_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "RelExpAST { ";
+                rel_exp->Dump();
+                std::cout << " " << op << " ";
+                add_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                add_exp->Generate();
+                label = add_exp->label;
+            }
+            else if (type == 1) {
+                rel_exp->Generate();
+                add_exp->Generate();
+                label = "%" + std::to_string(cnt++);
+                if (op == "<") {
+                    // %1 = lt %0, %2
+                    kstr += "    " + label + " = lt " + rel_exp->label + ", " + add_exp->label + "\n";
+                }
+                else if (op == ">") {
+                    // %1 = gt %0, %2
+                    kstr += "    " + label + " = gt " + rel_exp->label + ", " + add_exp->label + "\n";
+                }
+                else if (op == "<=") {
+                    // %1 = le %0, %2
+                    kstr += "    " + label + " = le " + rel_exp->label + ", " + add_exp->label + "\n";
+                }
+                else if (op == ">=") {
+                    // %1 = sge %0, %2
+                    kstr += "    " + label + " = ge " + rel_exp->label + ", " + add_exp->label + "\n";
+                }
+            }
+        }
+};
+
+// EqExp ::= RelExp | EqExp ("==" | "!=") RelExp;
+class EqExpAST : public BaseAST {
+    public:
+        int type;
+        std::string op;
+        std::unique_ptr<BaseAST> rel_exp;
+        std::unique_ptr<BaseAST> eq_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "EqExpAST { ";
+                rel_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "EqExpAST { ";
+                eq_exp->Dump();
+                std::cout << " " << op << " ";
+                rel_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                rel_exp->Generate();
+                label = rel_exp->label;
+            }
+            else if (type == 1) {
+                eq_exp->Generate();
+                rel_exp->Generate();
+                label = "%" + std::to_string(cnt++);
+                if (op == "==") {
+                    // %1 = eq %0, %2
+                    kstr += "    " + label + " = eq " + eq_exp->label + ", " + rel_exp->label + "\n";
+                }
+                else if (op == "!=") {
+                    // %1 = ne %0, %2
+                    kstr += "    " + label + " = ne " + eq_exp->label + ", " + rel_exp->label + "\n";
+                }
+            }
+        }
+};
+
+// LAndExp ::= EqExp | LAndExp "&&" EqExp;
+class LAndExpAST : public BaseAST {
+    public:
+        int type;
+        std::unique_ptr<BaseAST> eq_exp;
+        std::unique_ptr<BaseAST> land_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "LAndExpAST { ";
+                eq_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "LAndExpAST { ";
+                land_exp->Dump();
+                std::cout << " && ";
+                eq_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                eq_exp->Generate();
+                label = eq_exp->label;
+            }
+            else if (type == 1) {
+                land_exp->Generate();
+                eq_exp->Generate();
+                std::string label1 = "%" + std::to_string(cnt++);
+                std::string label2 = "%" + std::to_string(cnt++);
+                // %2 = ne 0, %0
+                kstr += "    " + label1 + " = ne 0, " + land_exp->label + "\n";
+                // %3 = ne 0, %1
+                kstr += "    " + label2 + " = ne 0, " + eq_exp->label + "\n";
+                // %4 = and %2, %3
+                label = "%" + std::to_string(cnt++);
+                kstr += "    " + label + " = and " + label1 + ", " + label2 + "\n";
+            }
+        }
+};
+
+// LOrExp ::= LAndExp | LOrExp "||" LAndExp;
+class LOrExpAST : public BaseAST {
+    public:
+        int type;
+        std::unique_ptr<BaseAST> land_exp;
+        std::unique_ptr<BaseAST> lor_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "LOrExpAST { ";
+                land_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "LOrExpAST { ";
+                lor_exp->Dump();
+                std::cout << " || ";
+                land_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                land_exp->Generate();
+                label = land_exp->label;
+            }
+            else if (type == 1) {
+                lor_exp->Generate();
+                land_exp->Generate();
+                std::string label1 = "%" + std::to_string(cnt++);
+                std::string label2 = "%" + std::to_string(cnt++);
+                // %2 = ne 0, %0
+                kstr += "    " + label1 + " = ne 0, " + lor_exp->label + "\n";
+                // %3 = ne 0, %1
+                kstr += "    " + label2 + " = ne 0, " + land_exp->label + "\n";
+                // %4 = or %2, %3
+                label = "%" + std::to_string(cnt++);
+                kstr += "    " + label + " = or " + label1 + ", " + label2 + "\n";
             }
         }
 };
