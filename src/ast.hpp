@@ -105,19 +105,19 @@ class StmtAST : public BaseAST {
         }
 };
 
-// Exp ::= UnaryExp;
+// Exp ::= AddExp;
 class ExpAST : public BaseAST {
     public:
-        std::unique_ptr<BaseAST> unary_exp;
+        std::unique_ptr<BaseAST> add_exp;
 
         void Dump() const override {
             std::cout << "ExpAST { ";
-            unary_exp->Dump();
+            add_exp->Dump();
             std::cout << " }";
         }
         void Generate() override {
-            unary_exp->Generate();
-            label = unary_exp->label;
+            add_exp->Generate();
+            label = add_exp->label;
         }
 };
 
@@ -193,5 +193,104 @@ class PrimaryExpAST : public BaseAST {
             }
             else if (type == 1)
                 label = std::to_string(number);
+        }
+};
+
+// AddExp ::= MulExp | AddExp ("+" | "-") MulExp;
+class AddExpAST : public BaseAST {
+    public:
+        int type;
+        char op;
+        std::unique_ptr<BaseAST> mul_exp;
+        std::unique_ptr<BaseAST> add_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "AddExpAST { ";
+                mul_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "AddExpAST { ";
+                add_exp->Dump();
+                std::cout << " " << op << " ";
+                mul_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                mul_exp->Generate();
+                label = mul_exp->label;
+            }
+            else if (type == 1) {
+                add_exp->Generate();
+                mul_exp->Generate();
+                label = "%" + std::to_string(cnt++);
+                switch (op) {
+                    case '+' : {
+                        // %1 = add %0, %2
+                        kstr += "    " + label + " = add " + add_exp->label + ", " + mul_exp->label + "\n";
+                        break;
+                    }
+                    case '-' : {
+                        // %1 = sub %0, %2
+                        kstr += "    " + label + " = sub " + add_exp->label + ", " + mul_exp->label + "\n";
+                        break;
+                    }
+                }
+            }
+        }
+};
+
+// MulExp ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+class MulExpAST : public BaseAST {
+    public:
+        int type;
+        char op;
+        std::unique_ptr<BaseAST> unary_exp;
+        std::unique_ptr<BaseAST> mul_exp;
+
+        void Dump() const override {
+            if (type == 0) {
+                std::cout << "MulExpAST { ";
+                unary_exp->Dump();
+                std::cout << " }";
+            }
+            else if (type == 1) {
+                std::cout << "MulExpAST { ";
+                mul_exp->Dump();
+                std::cout << " " << op << " ";
+                unary_exp->Dump();
+                std::cout << " }";
+            }
+        }
+        void Generate() override {
+            if (type == 0) {
+                unary_exp->Generate();
+                label = unary_exp->label;
+            }
+            else if (type == 1) {
+                mul_exp->Generate();
+                unary_exp->Generate();
+                label = "%" + std::to_string(cnt++);
+                switch (op) {
+                    case '*' : {
+                        // %1 = mul %0, %2
+                        kstr += "    " + label + " = mul " + mul_exp->label + ", " + unary_exp->label + "\n";
+                        break;
+                    }
+                    case '/' : {
+                        // %1 = div %0, %2
+                        kstr += "    " + label + " = div " + mul_exp->label + ", " + unary_exp->label + "\n";
+                        break;
+                    }
+                    case '%' : {
+                        // %1 = rem %0, %2
+                        kstr += "    " + label + " = rem " + mul_exp->label + ", " + unary_exp->label + "\n";
+                        break;
+                    }
+                }
+            }
         }
 };
