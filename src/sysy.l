@@ -6,7 +6,6 @@
 
 #include <cstdlib>
 #include <string>
-#include "ast.hpp"
 #include "sysy.tab.hpp"
 
 using namespace std;
@@ -35,6 +34,10 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 {Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Octal}         { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
+
+"+"             { yylval.char_val = *yytext; return CHAR_CONST; }
+"-"             { yylval.char_val = *yytext; return CHAR_CONST; }
+"!"             { yylval.char_val = *yytext; return CHAR_CONST; }
 
 .               { return yytext[0]; }
 
