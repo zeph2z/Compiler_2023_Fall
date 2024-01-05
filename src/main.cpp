@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <cstring>
+#include <unordered_map>
 #include "ast.hpp"
 #include "koopa.h"
 #include "raw.hpp"
@@ -15,6 +16,12 @@ extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 int cnt = 0;
 std::string kstr;
+std::unordered_map<std::string, SymbolInfo> SymbolTable;
+
+std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
+    os << "type: " << info.type << ", value: " << info.value;
+    return os;
+}
 
 int main(int argc, const char *argv[]) {
   // compiler mode input -o output 
@@ -25,6 +32,9 @@ int main(int argc, const char *argv[]) {
   
   yyin = fopen(input, "r");
   assert(yyin);
+
+  extern int yydebug;
+  yydebug = 0;
 
   unique_ptr<BaseAST> ast;
   auto retp = yyparse(ast);

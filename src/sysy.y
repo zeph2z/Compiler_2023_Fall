@@ -9,7 +9,10 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <stdio.h>
 #include "ast.hpp"
+
+#define YYDEBUG 1
 
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, const char *s);
@@ -27,19 +30,25 @@ using namespace std;
   BaseAST* ast_val;
 }
 
-%token INT RETURN
-%token <str_val> IDENT
+%token INT RETURN CONST
 %token <int_val> INT_CONST
 %token <char_val> PLUS MINUS NOT TIMES DIVIDE MOD
-%token <str_val> LT GT LE GE EQ NE AND OR
+%token <str_val> IDENT LT GT LE GE EQ NE AND OR
 
-%type <ast_val> FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp MulExp AddExp LOrExp LAndExp EqExp RelExp
+// lv1
+%type <ast_val> FuncDef FuncType Block Stmt
+// lv3
+%type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp LOrExp LAndExp EqExp RelExp
+// lv4
+%type <ast_val> Decl ConstDecl ConstDef ConstInitVal BlockItem LVal BType ConstExp
+
 %type <int_val> Number
 %type <char_val> UnaryOp AddOp MulOp
-%type <str_val> RelOp EqOp
+%type <str_val> RelOp EqOp 
 
 %%
 
+// lv1
 CompUnit
   : FuncDef {
     auto comp_unit = make_unique<CompUnitAST>();
@@ -52,24 +61,24 @@ FuncDef
   : FuncType IDENT '(' ')' Block {
     auto ast = new FuncDefAST();
     ast->func_type = unique_ptr<BaseAST>($1);
-    ast->ident = *unique_ptr<string>($2);
+    ast->ident = *$2;
     ast->block = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
   ;
 
 FuncType
-  : INT {
+  : BType {
     auto ast = new FuncTypeAST();
-    ast->type = "int";
+    ast->b_type = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
 
 Block
-  : '{' Stmt '}' {
+  : '{' BlockItem '}' {
     auto ast = new BlockAST();
-    ast->stmt = unique_ptr<BaseAST>($2);
+    ast->block_item = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
   ;
@@ -83,12 +92,14 @@ Stmt
   }
   ;
 
+// lv3
 Exp
   : LOrExp {
     auto ast = new ExpAST();
     ast->lor_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
+  ;
 
 PrimaryExp 
   : '(' Exp ')' {
@@ -97,12 +108,19 @@ PrimaryExp
     ast->exp = unique_ptr<BaseAST>($2);
     $$ = ast;
   } 
-  | Number {
+  | LVal {
     auto ast = new PrimaryExpAST();
     ast->type = 1;
+    ast->l_val = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Number {
+    auto ast = new PrimaryExpAST();
+    ast->type = 2;
     ast->number = $1;
     $$ = ast;
   }
+  ;
 
 UnaryExp
   : PrimaryExp {
@@ -118,6 +136,7 @@ UnaryExp
     ast->unary_exp = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
+  ;
 
 MulExp
   : UnaryExp {
@@ -134,6 +153,7 @@ MulExp
     ast->unary_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 AddExp
   : MulExp {
@@ -150,6 +170,7 @@ AddExp
     ast->mul_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 RelExp
   : AddExp {
@@ -166,6 +187,7 @@ RelExp
     ast->add_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 EqExp
   : RelExp {
@@ -182,6 +204,7 @@ EqExp
     ast->rel_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 LAndExp
   : EqExp {
@@ -197,6 +220,7 @@ LAndExp
     ast->eq_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
 
 LOrExp
   : LAndExp {
@@ -212,36 +236,135 @@ LOrExp
     ast->land_exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  ;
+
+// lv4
+Decl
+  : ConstDecl {
+    auto ast = new DeclAST();
+    ast->const_decl = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  ;
+
+ConstDecl
+  : CONST BType ConstDef ';' {
+    auto ast = new ConstDeclAST();
+    ast->b_type = unique_ptr<BaseAST>($2);
+    ast->const_def = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+ConstDef
+  : IDENT '=' ConstInitVal {
+    auto ast = new ConstDefAST();
+    ast->ident = *$1;
+    ast->const_init_val = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | IDENT '=' ConstInitVal ',' ConstDef {
+    auto ast = new ConstDefAST();
+    ast->ident = *$1;
+    ast->const_init_val = unique_ptr<BaseAST>($3);
+    ast->next = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  ;
+
+ConstInitVal
+  : ConstExp {
+    auto ast = new ConstInitValAST();
+    ast->const_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  ;
+
+ConstExp
+  : Exp {
+    auto ast = new ConstExpAST();
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  ;
+
+BlockItem
+  : Decl {
+    auto ast = new BlockItemAST();
+    ast->decl = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Stmt {
+    auto ast = new BlockItemAST();
+    ast->stmt = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Decl BlockItem {
+    auto ast = new BlockItemAST();
+    ast->decl = unique_ptr<BaseAST>($1);
+    ast->next = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | Stmt BlockItem {
+    auto ast = new BlockItemAST();
+    ast->stmt = unique_ptr<BaseAST>($1);
+    ast->next = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  ;
+
+LVal
+  : IDENT {
+    auto ast = new LValAST();
+    ast->label = *$1;
+    $$ = ast;
+  }
+  ;
+
+// not ast_val
+BType
+  : INT {
+    auto ast = new BTypeAST();
+    ast->label = "int";
+    $$ = ast;
+  }
+  ;
 
 Number
   : INT_CONST {
     $$ = $1;
   }
+  ;
 
 UnaryOp
   : PLUS | MINUS | NOT {
     $$ = $1;
   }
+  ;
 
 AddOp
   : PLUS | MINUS {
     $$ = $1;
   }
+  ;
 
 MulOp
   : TIMES | DIVIDE | MOD {
     $$ = $1;
   }
+  ;
 
 RelOp
   : LT | GT | LE | GE {
     $$ = $1;
   }
+  ;
 
 EqOp
   : EQ | NE {
     $$ = $1;
   }
+  ;
 
 %%
 

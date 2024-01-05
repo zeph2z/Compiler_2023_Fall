@@ -32,6 +32,7 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         int32_t int_val = ret_value->kind.data.integer.value;
                         str += "    li a0, " + std::to_string(int_val) + "\n";
                         str += "    ret\n";
+                        break;
                     }
                 }
             }
