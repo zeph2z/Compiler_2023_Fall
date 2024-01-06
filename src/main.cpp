@@ -34,7 +34,7 @@ int main(int argc, const char *argv[]) {
   assert(yyin);
 
   extern int yydebug;
-  yydebug = 0;
+  yydebug = 1;
 
   unique_ptr<BaseAST> ast;
   auto retp = yyparse(ast);

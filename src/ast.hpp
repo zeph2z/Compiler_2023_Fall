@@ -97,7 +97,7 @@ class BlockAST : public BaseAST {
                 new_table->parent = CurrentSymbolTable;
                 CurrentSymbolTable = new_table;
             }
-            block_item->Generate(write);
+            if (block_item) block_item->Generate(write);
             CurrentSymbolTable = CurrentSymbolTable->parent;
             level--;
         }
@@ -171,7 +171,6 @@ class StmtAST : public BaseAST {
             else if (type == 2) {
                 if (exp) {
                     exp->Generate(true);
-                    kstr += "    " + exp->label + "\n";
                 }
                 else
                     kstr += "\n";

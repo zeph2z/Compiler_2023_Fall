@@ -81,6 +81,10 @@ Block
     ast->block_item = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
+  | '{' '}' {
+    auto ast = new BlockAST();
+    $$ = ast;
+  }
   ;
 
 Stmt
