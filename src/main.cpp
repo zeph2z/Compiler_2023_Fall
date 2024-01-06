@@ -45,7 +45,7 @@ int main(int argc, const char *argv[]) {
     std::cout << "key: " << pair.first << ", " << pair.second << std::endl;
   }
   cout << endl;
-
+  
   FILE *yyout = fopen(output, "w");
   assert(yyout);
   fprintf(yyout, "%s", kstr.c_str());

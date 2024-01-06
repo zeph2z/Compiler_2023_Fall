@@ -143,7 +143,7 @@ class StmtAST : public BaseAST {
             if (type == 0)
                 kstr += "    ret " + exp->label + "\n";
             else if (type == 1)
-                kstr += "    store " + exp->label + ", @" + l_val->label + "\n";
+                kstr += "    store " + exp->label + ", @" + l_val->label + "\n\n";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -761,14 +761,12 @@ class VarDefAST : public BaseAST {
             SymbolInfo info;
             info.type = str;
             info.value = 0;
-            if (init_val) {
-                init_val->Generate(false);
-                info.value = init_val->value;
-            }
+            if (init_val) init_val->Generate(true);
             SymbolTable[ident] = info;
             if (info.type == "int") {
                 kstr += "    @" + ident + " = alloc i32\n";
-                kstr += "    store " + std::to_string(info.value) + ", @" + ident + "\n";
+                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "\n\n";
+                else kstr += "    store 0, @" + ident + "\n\n";
             }
             if (next)
                 next->AddtoSymbolTable(str, false);
