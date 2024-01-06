@@ -5,9 +5,9 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern bool must_return;
+extern bool must_return, branch;
 extern int cnt, level, block_cnt;
-extern std::string kstr, last_br;
+extern std::string kstr, last_br, true_block_name, false_block_name;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
 extern bool last_is_br();
@@ -185,11 +185,16 @@ class StmtAST : public BaseAST {
                 block->Generate(write);
             }
             else if (type == 4) {
-                exp->Generate(true);
+                branch = true;
                 int _block_cnt = block_cnt++;
                 if (else_stmt) {
                     // br %0, %then_0, %else_0
-                    kstr += "    br " + exp->label + ", %then_" + std::to_string(_block_cnt) + ", %else_" + std::to_string(_block_cnt) + "\n\n";
+                    true_block_name = "%then_" + std::to_string(_block_cnt);
+                    false_block_name = "%else_" + std::to_string(_block_cnt);
+                    exp->Generate(true);
+                    branch = false;
+
+                    kstr += "    br " + exp->label + ", " + "%then_" + std::to_string(_block_cnt) + ", " + "%else_" + std::to_string(_block_cnt) + "\n\n";
                     
                     kstr += "%then_" + std::to_string(_block_cnt) + ":\n";
                     last_br.clear();
@@ -207,7 +212,12 @@ class StmtAST : public BaseAST {
                     if (!must_return) kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
                 }
                 else {
-                    kstr += "    br " + exp->label + ", %then_" + std::to_string(_block_cnt) + ", %end_" + std::to_string(_block_cnt) + "\n\n";
+                    true_block_name = "%then_" + std::to_string(_block_cnt);
+                    false_block_name = "%end_" + std::to_string(_block_cnt);
+                    exp->Generate(true);
+                    branch = false;
+
+                    kstr += "    br " + exp->label + ", " + "%then_" + std::to_string(_block_cnt) + ", " + "%end_" + std::to_string(_block_cnt) + "\n\n";
                     kstr += "%then_" + std::to_string(_block_cnt) + ":\n";
                     last_br.clear();
                     stmt->Generate(true);
@@ -613,18 +623,30 @@ class LAndExpAST : public BaseAST {
                 value = eq_exp->value;
             }
             else if (type == 1) {
-                land_exp->Generate(write);
-                eq_exp->Generate(write);
                 if (write) {
+                    land_exp->Generate(write);
                     std::string label1 = "%" + std::to_string(cnt++);
-                    std::string label2 = "%" + std::to_string(cnt++);
                     // %2 = ne 0, %0
                     kstr += "    " + label1 + " = ne 0, " + land_exp->label + "\n";
+                    if (branch) {
+                        kstr += "    br " + label1 + ", %logic_true_" + std::to_string(block_cnt) + ", " + false_block_name + "\n\n";
+                        kstr += "%logic_true_" + std::to_string(block_cnt++) + ":\n";
+                    }
+
+                    eq_exp->Generate(write);
+                    std::string label2 = "%" + std::to_string(cnt++);
                     // %3 = ne 0, %1
                     kstr += "    " + label2 + " = ne 0, " + eq_exp->label + "\n";
                     // %4 = and %2, %3
-                    label = "%" + std::to_string(cnt++);
-                    kstr += "    " + label + " = and " + label1 + ", " + label2 + "\n";
+                    if (branch) label = label2;
+                    else {
+                        label = "%" + std::to_string(cnt++);
+                        kstr += "    " + label + " = and " + label1 + ", " + label2 + "\n";
+                    }
+                }
+                else {
+                    land_exp->Generate(write);
+                    eq_exp->Generate(write);
                 }
                 value = land_exp->value && eq_exp->value;
             }
@@ -660,18 +682,30 @@ class LOrExpAST : public BaseAST {
                 value = land_exp->value;
             }
             else if (type == 1) {
-                lor_exp->Generate(write);
-                land_exp->Generate(write);
                 if (write) {
+                    lor_exp->Generate(write);
                     std::string label1 = "%" + std::to_string(cnt++);
-                    std::string label2 = "%" + std::to_string(cnt++);
                     // %2 = ne 0, %0
                     kstr += "    " + label1 + " = ne 0, " + lor_exp->label + "\n";
+                    if (branch) {
+                        kstr += "    br " + label1 + ", " + true_block_name + ", %logic_false_" + std::to_string(block_cnt) + "\n\n";
+                        kstr += "%logic_false_" + std::to_string(block_cnt++) + ":\n";
+                    }
+                    
+                    land_exp->Generate(write);
+                    std::string label2 = "%" + std::to_string(cnt++);
                     // %3 = ne 0, %1
                     kstr += "    " + label2 + " = ne 0, " + land_exp->label + "\n";
                     // %4 = or %2, %3
-                    label = "%" + std::to_string(cnt++);
-                    kstr += "    " + label + " = or " + label1 + ", " + label2 + "\n";
+                    if (branch) label = label2;
+                    else {
+                        label = "%" + std::to_string(cnt++);
+                        kstr += "    " + label + " = or " + label1 + ", " + label2 + "\n";
+                    }
+                }
+                else {
+                    lor_exp->Generate(write);
+                    land_exp->Generate(write);
                 }
                 value = lor_exp->value || land_exp->value;
             }
