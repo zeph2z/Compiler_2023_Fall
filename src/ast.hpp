@@ -6,7 +6,7 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern bool must_return, branch, func_is_void;
+extern bool must_return, branch, func_is_void, has_left;
 extern int cnt, level, block_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name;
 extern std::stack<int> while_stack;
@@ -144,7 +144,9 @@ class StmtAST : public BaseAST {
         void Generate(bool write = true) override {
             if (type == 0) {
                 if (exp) {
+                    has_left = true;
                     exp->Generate(true);
+                    has_left = false;
                     kstr += "    ret " + exp->label + "\n";
                 }
                 else
@@ -152,7 +154,9 @@ class StmtAST : public BaseAST {
                 last_br = "ret";
             }
             else if (type == 1) {
+                has_left = true;
                 exp->Generate(true);
+                has_left = false;
                 auto it = CurrentSymbolTable;
                 while (it) {
                     auto it2 = it->table.find(l_val->label);
@@ -313,7 +317,7 @@ class UnaryExpAST : public BaseAST {
             else if (type == 2) {
                 if (func_r_params) func_r_params->Generate(write);
                 if (write) {
-                    if (FuncTable[ident].type != "void") {
+                    if (has_left) {
                         label = "%" + std::to_string(cnt++);
                         kstr += "    " + label + " = call @" + ident + "(";
                     }
@@ -750,8 +754,12 @@ class VarDefAST : public BaseAST {
             info.type = str;
             info.value = 0;
             info.is_const = is_const;
-            if (init_val) init_val->Generate(true);
             info.level = level;
+            if (init_val) {
+                has_left = true;
+                init_val->Generate(true);
+                has_left = false;
+            }
             CurrentSymbolTable->table[ident] = info;
             if (info.type == "int") {
                 kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";

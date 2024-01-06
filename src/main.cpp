@@ -16,7 +16,7 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
-bool must_return = false, branch = false, func_is_void = false;
+bool must_return = false, branch = false, func_is_void = false, has_left = false;
 int cnt = 0, level = 0, block_cnt = 0;
 std::string kstr, last_br, true_block_name, false_block_name;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable;
@@ -35,6 +35,18 @@ bool last_is_br() {
     return false;
 }
 
+void decl_lib_func() {
+  kstr += "decl @getint(): i32\n";
+  kstr += "decl @getch(): i32\n";
+  kstr += "decl @getarray(*i32): i32\n";
+  kstr += "decl @putint(i32)\n";
+  kstr += "decl @putch(i32)\n";
+  kstr += "decl @putarray(i32, *i32)\n";
+  kstr += "decl @starttime()\n";
+  kstr += "decl @stoptime()\n";
+  kstr += "\n";
+}
+
 int main(int argc, const char *argv[]) {
   // compiler mode input -o output 
   assert(argc == 5);
@@ -51,6 +63,8 @@ int main(int argc, const char *argv[]) {
   unique_ptr<BaseAST> ast;
   auto retp = yyparse(ast);
   assert(!retp);
+
+  decl_lib_func();
 
   ast->Generate();
   cout << endl;
