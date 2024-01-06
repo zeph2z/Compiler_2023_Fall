@@ -2,12 +2,14 @@
 
 #include <iostream>
 #include <memory>
+#include <stack>
 #include <string>
 #include "symbol_table.hpp"
 
 extern bool must_return, branch;
 extern int cnt, level, block_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name;
+extern std::stack<int> while_stack;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
 extern bool last_is_br();
@@ -125,12 +127,14 @@ class BlockItemAST : public BaseAST {
             }
         }
         void Generate(bool write = true) override {
-            if (decl)
-                decl->Generate(write);
-            else if (stmt)
-                stmt->Generate(write);
-            if (next) {
-                next->Generate(write);
+            if (!last_is_br()) {
+                if (decl)
+                    decl->Generate(write);
+                else if (stmt)
+                    stmt->Generate(write);
+                if (next) {
+                    next->Generate(write);
+                }
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -154,7 +158,7 @@ class StmtAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            if (type == 0 && !must_return && !last_is_br()) {
+            if (type == 0) {
                 if (exp) {
                     exp->Generate(true);
                     kstr += "    ret " + exp->label + "\n";
@@ -230,6 +234,7 @@ class StmtAST : public BaseAST {
             }
             else if (type == 5) {
                 int _block_cnt = block_cnt++;
+                while_stack.push(_block_cnt);
                 kstr += "    jump %while_entry_" + std::to_string(_block_cnt) + "\n\n";
             
                 kstr += "%while_entry_" + std::to_string(_block_cnt) + ":\n";
@@ -247,6 +252,17 @@ class StmtAST : public BaseAST {
 
                 kstr += "%end_" + std::to_string(_block_cnt) + ":\n";
                 last_br.clear();
+                while_stack.pop();
+            }
+            else if (type == 6) {
+                int _block_cnt = while_stack.top();
+                kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n\n";
+                last_br = "jump";
+            }
+            else if (type == 7) {
+                int _block_cnt = while_stack.top();
+                kstr += "    jump %while_entry_" + std::to_string(_block_cnt) + "\n\n";
+                last_br = "jump";
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}

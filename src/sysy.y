@@ -145,6 +145,16 @@ Stmt
     ast->stmt = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
+  | BREAK ';' {
+    auto ast = new StmtAST();
+    ast->type = 6;
+    $$ = ast;
+  }
+  | CONTINUE ';' {
+    auto ast = new StmtAST();
+    ast->type = 7;
+    $$ = ast;
+  }
   ;
 
 // lv3

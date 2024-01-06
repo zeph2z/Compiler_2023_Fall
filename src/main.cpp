@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <cstring>
+#include <stack>
 #include <unordered_map>
 #include "ast.hpp"
 #include "koopa.h"
@@ -19,6 +20,7 @@ bool must_return = false, branch = false;
 int cnt = 0, level = 0, block_cnt = 0;
 std::string kstr, last_br, true_block_name, false_block_name;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable;
+std::stack<int> while_stack;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
     os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
