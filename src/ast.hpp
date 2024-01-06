@@ -6,7 +6,7 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern bool must_return, branch;
+extern bool must_return, branch, func_is_void;
 extern int cnt, level, block_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name;
 extern std::stack<int> while_stack;
@@ -20,50 +20,51 @@ class BaseAST {
         int value;
         std::unique_ptr<BaseAST> next = nullptr;
 
-        virtual void Dump() const = 0;
         virtual void Generate(bool write = true) = 0;
         virtual void AddtoSymbolTable(std::string str, bool is_const) = 0;
-        // virtual std::string GetIdent() { return ""; };
 
         virtual ~BaseAST() = default;
 };
 
-// CompUnit ::= FuncDef;
+// CompUnit ::= [CompUnit] FuncDef;
 class CompUnitAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> func_def;
 
-        void Dump() const override {
-            std::cout << "CompUnitAST { ";
-            func_def->Dump();
-            std::cout << " }\n";
-        }
         void Generate(bool write = true) override {
             func_def->Generate(write);
+            if (next) next->Generate(write);
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// FuncDef ::= FuncType IDENT "(" ")" Block ;
+// FuncDef ::= FuncType IDENT "(" [FuncFParams] ")" Block ;
 class FuncDefAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> func_type;
         std::string ident;
         std::unique_ptr<BaseAST> block;
+        std::unique_ptr<BaseAST> func_f_params;
 
-        void Dump() const override {
-            std::cout << "FuncDefAST { ";
-            func_type->Dump();
-            std::cout << ", " << ident << ", ";
-            block->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
-            kstr += "fun @" + ident + "(): ";
+            FuncSymbolTable.reset(new SymbolTableNode());
+            CurrentSymbolTable.reset();
+            level = 0;
+            last_br.clear();
+            kstr += "fun @" + ident + "(";
+            if (func_f_params) func_f_params->Generate(write);
+            kstr += "): ";
+
             func_type->Generate(write);
-            kstr += " {\n%entry:\n";
+            if (func_type->label == "void") func_is_void = true;
+            else func_is_void = false;
+
+            FuncTable[ident].type = func_type->label;
+
+            kstr += "{\n%entry:\n";
             block->Generate(write);
-            kstr += "}";
+            if (func_is_void && !last_is_br()) kstr += "    ret\n"; 
+            kstr += "}\n\n";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -73,11 +74,9 @@ class FuncTypeAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> b_type;
 
-        void Dump() const override {
-            std::cout << "FuncTypeAST { " << b_type->label << " }";
-        }
         void Generate(bool write = true) override {
-            kstr += "i32";
+            label = b_type->label;
+            if (label == "int") kstr += "i32 ";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -87,15 +86,17 @@ class BlockAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> block_item;
 
-        void Dump() const override {
-            std::cout << "BlockAST { ";
-            block_item->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             level++;
-            if (CurrentSymbolTable == nullptr)
+            if (CurrentSymbolTable == nullptr) {
                 CurrentSymbolTable = std::make_shared<SymbolTableNode>();
+                for (const auto& pair : FuncSymbolTable->table) {
+                    CurrentSymbolTable->table.insert(pair);
+                    kstr += "    @" + pair.first + "_1" + " = alloc i32\n";
+                    kstr += "    store @" + pair.first + ", @" + pair.first + "_1" + "\n";
+                }
+                FuncSymbolTable.reset();
+            }
             else {
                 std::shared_ptr<SymbolTableNode> new_table = std::make_shared<SymbolTableNode>();
                 new_table->parent = CurrentSymbolTable;
@@ -114,18 +115,6 @@ class BlockItemAST : public BaseAST {
         std::unique_ptr<BaseAST> decl = nullptr;
         std::unique_ptr<BaseAST> stmt = nullptr;
 
-        void Dump() const override {
-            std::cout << "BlockItemAST { ";
-            if (decl)
-                decl->Dump();
-            else if (stmt)
-                stmt->Dump();
-            std::cout << " }";
-            if (next) {
-                std::cout << ", ";
-                next->Dump();
-            }
-        }
         void Generate(bool write = true) override {
             if (!last_is_br()) {
                 if (decl)
@@ -142,7 +131,7 @@ class BlockItemAST : public BaseAST {
 
 // Stmt ::= "return" [Exp] ";" | LVal "=" Exp ";" | [Exp] ';' | Block;
 // Stmt ::= "if" "(" Exp ")" Stmt ["else" Stmt];
-// Stmt ::= "while" "(" Exp ")" Stmt;
+// Stmt ::= "while" "(" Exp ")" Stmt | break ";" | continue ";";
 class StmtAST : public BaseAST {
     public:
         int type;
@@ -152,11 +141,6 @@ class StmtAST : public BaseAST {
         std::unique_ptr<BaseAST> stmt;
         std::unique_ptr<BaseAST> else_stmt;
 
-        void Dump() const override {
-            std::cout << "StmtAST { ";
-            exp->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 if (exp) {
@@ -273,11 +257,6 @@ class ExpAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> lor_exp;
 
-        void Dump() const override {
-            std::cout << "ExpAST { ";
-            lor_exp->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             lor_exp->Generate(write);
             if (write) label = lor_exp->label;
@@ -287,23 +266,16 @@ class ExpAST : public BaseAST {
 };
 
 // UnaryExp ::= PrimaryExp | UnaryOp UnaryExp;
+// UnaryExp ::= IDENT "(" [FuncRParams] ")";
 class UnaryExpAST : public BaseAST {
     public:
         int type;
         std::unique_ptr<BaseAST> primary_exp;
         char op;
         std::unique_ptr<BaseAST> unary_exp;
+        std::unique_ptr<BaseAST> func_r_params;
+        std::string ident;
 
-        void Dump() const override {
-            std::cout << "UnaryExpAST { ";
-            if (type == 0)
-                primary_exp->Dump();
-            else if (type == 1) {
-                std::cout << op << " ";
-                unary_exp->Dump();
-            }
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 primary_exp->Generate(write);
@@ -338,6 +310,19 @@ class UnaryExpAST : public BaseAST {
                     }
                 }
             }
+            else if (type == 2) {
+                if (func_r_params) func_r_params->Generate(write);
+                if (write) {
+                    if (FuncTable[ident].type != "void") {
+                        label = "%" + std::to_string(cnt++);
+                        kstr += "    " + label + " = call @" + ident + "(";
+                    }
+                    else
+                        kstr += "    call @" + ident + "(";
+                    if (func_r_params) kstr += func_r_params->label;
+                    kstr += ")\n";
+                }
+            }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -349,19 +334,6 @@ class PrimaryExpAST : public BaseAST {
         int number;
         std::unique_ptr<BaseAST> exp, l_val;
 
-        void Dump() const override {
-            std::cout << "PrimaryExpAST { ";
-            if (type == 0) {
-                std::cout << "( ";
-                exp->Dump();
-                std::cout << " )";
-            }
-            else if (type == 1)
-                l_val->Dump();
-            else if (type == 2)
-                std::cout << number;
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 exp->Generate(write);
@@ -406,20 +378,6 @@ class AddExpAST : public BaseAST {
         std::unique_ptr<BaseAST> mul_exp;
         std::unique_ptr<BaseAST> add_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "AddExpAST { ";
-                mul_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "AddExpAST { ";
-                add_exp->Dump();
-                std::cout << " " << op << " ";
-                mul_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 mul_exp->Generate(write);
@@ -461,20 +419,6 @@ class MulExpAST : public BaseAST {
         std::unique_ptr<BaseAST> unary_exp;
         std::unique_ptr<BaseAST> mul_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "MulExpAST { ";
-                unary_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "MulExpAST { ";
-                mul_exp->Dump();
-                std::cout << " " << op << " ";
-                unary_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 unary_exp->Generate(write);
@@ -499,8 +443,10 @@ class MulExpAST : public BaseAST {
                             // %1 = div %0, %2
                             kstr += "    " + label + " = div " + mul_exp->label + ", " + unary_exp->label + "\n";
                         }
-                        value = mul_exp->value / unary_exp->value;
+                        if (unary_exp->value == 0) value = 0;
+                        else value = mul_exp->value / unary_exp->value;
                         break;
+                        
                     }
                     case '%' : {
                         if (write) {
@@ -524,20 +470,6 @@ class RelExpAST : public BaseAST {
         std::unique_ptr<BaseAST> add_exp;
         std::unique_ptr<BaseAST> rel_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "RelExpAST { ";
-                add_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "RelExpAST { ";
-                rel_exp->Dump();
-                std::cout << " " << op << " ";
-                add_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 add_exp->Generate(write);
@@ -589,20 +521,6 @@ class EqExpAST : public BaseAST {
         std::unique_ptr<BaseAST> rel_exp;
         std::unique_ptr<BaseAST> eq_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "EqExpAST { ";
-                rel_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "EqExpAST { ";
-                eq_exp->Dump();
-                std::cout << " " << op << " ";
-                rel_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 rel_exp->Generate(write);
@@ -639,20 +557,6 @@ class LAndExpAST : public BaseAST {
         std::unique_ptr<BaseAST> eq_exp;
         std::unique_ptr<BaseAST> land_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "LAndExpAST { ";
-                eq_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "LAndExpAST { ";
-                land_exp->Dump();
-                std::cout << " && ";
-                eq_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write = true) override {
             if (type == 0) {
                 eq_exp->Generate(write);
@@ -698,20 +602,6 @@ class LOrExpAST : public BaseAST {
         std::unique_ptr<BaseAST> land_exp;
         std::unique_ptr<BaseAST> lor_exp;
 
-        void Dump() const override {
-            if (type == 0) {
-                std::cout << "LOrExpAST { ";
-                land_exp->Dump();
-                std::cout << " }";
-            }
-            else if (type == 1) {
-                std::cout << "LOrExpAST { ";
-                lor_exp->Dump();
-                std::cout << " || ";
-                land_exp->Dump();
-                std::cout << " }";
-            }
-        }
         void Generate(bool write) override {
             if (type == 0) {
                 land_exp->Generate(write);
@@ -757,12 +647,6 @@ class DeclAST : public BaseAST {
         std::unique_ptr<BaseAST> const_decl;
         std::unique_ptr<BaseAST> var_decl;
 
-        void Dump() const override {
-            std::cout << "DeclAST { ";
-            if (type == 0) const_decl->Dump();
-            else if (type == 1) var_decl->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             if (type == 0) const_decl->Generate(false);
             if (type == 1) var_decl->Generate(write);
@@ -776,11 +660,6 @@ class ConstDeclAST : public BaseAST {
         std::unique_ptr<BaseAST> b_type;
         std::unique_ptr<BaseAST> const_def;
 
-        void Dump() const override {
-            std::cout << "ConstDeclAST { " << b_type->label << ", ";
-            const_def->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             const_def->AddtoSymbolTable(b_type->label, true);
         }
@@ -793,16 +672,6 @@ class ConstDefAST : public BaseAST {
         std::string ident;
         std::unique_ptr<BaseAST> const_init_val;
 
-        void Dump() const override {
-            std::cout << "ConstDefAST { ";
-            std::cout << ident << ", ";
-            const_init_val->Dump();
-            std::cout << " }";
-            if (next) {
-                std::cout << ", ";
-                next->Dump();
-            }
-        }
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {
             SymbolInfo info;
@@ -822,11 +691,6 @@ class ConstInitValAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> const_exp;
 
-        void Dump() const override {
-            std::cout << "ConstInitValAST { ";
-            const_exp->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             const_exp->Generate(write);
             if (write) label = const_exp->label;
@@ -840,11 +704,6 @@ class ConstExpAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> exp;
 
-        void Dump() const override {
-            std::cout << "ConstExpAST { ";
-            exp->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             exp->Generate(write);
             if (write) label = exp->label;
@@ -856,19 +715,13 @@ class ConstExpAST : public BaseAST {
 // LVal ::= IDENT;
 class LValAST : public BaseAST {
     public:
-        void Dump() const override {
-            std::cout << "LValAST { " << label << " }";
-        }
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// BType ::= INT;
+// BType ::= INT | VOID;
 class BTypeAST : public BaseAST {
     public:
-        void Dump() const override {
-            std::cout << "BTypeAST { " << label << " }";
-        }
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -879,11 +732,6 @@ class VarDeclAST : public BaseAST {
         std::unique_ptr<BaseAST> b_type;
         std::unique_ptr<BaseAST> var_def;
 
-        void Dump() const override {
-            std::cout << "VarDeclAST { " << b_type->label << ", ";
-            var_def->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             var_def->AddtoSymbolTable(b_type->label, false);
         }
@@ -896,16 +744,6 @@ class VarDefAST : public BaseAST {
         std::string ident;
         std::unique_ptr<BaseAST> init_val = nullptr;
 
-        void Dump() const override {
-            std::cout << "VarDefAST { ";
-            std::cout << ident << ", ";
-            init_val->Dump();
-            std::cout << " }";
-            if (next) {
-                std::cout << ", ";
-                next->Dump();
-            }
-        }
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {
             SymbolInfo info;
@@ -930,15 +768,62 @@ class InitValAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> exp;
 
-        void Dump() const override {
-            std::cout << "InitValAST { ";
-            exp->Dump();
-            std::cout << " }";
-        }
         void Generate(bool write = true) override {
             exp->Generate(write);
             if (write) label = exp->label;
             value = exp->value;
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
+};
+
+// FuncFParams ::= FuncFParam | FuncFParam "," FuncFParams;
+class FuncFParamsAST : public BaseAST {
+    public:
+        std::unique_ptr<BaseAST> func_f_param;
+
+        void Generate(bool write = true) override {
+            func_f_param->Generate(write);
+            if (next) {
+                kstr += ", ";
+                next->Generate(write);
+            }
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
+};
+
+// FuncFParam ::= BType IDENT;
+class FuncFParamAST : public BaseAST {
+    public:
+        std::unique_ptr<BaseAST> b_type;
+        std::string ident;
+
+        void Generate(bool write = true) override {
+            this->AddtoSymbolTable(b_type->label, false);
+            if (b_type->label == "int")
+                kstr += "@" + ident + ": i32";
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {
+            SymbolInfo info;
+            info.type = str;
+            info.value = 0;
+            info.is_const = is_const;
+            info.level = 1;
+            FuncSymbolTable->table[ident] = info;
+        }
+};
+
+// FuncRParams ::= Exp | Exp "," FuncRParams;
+class FuncRParamsAST : public BaseAST {
+    public:
+        std::unique_ptr<BaseAST> exp;
+
+        void Generate(bool write = true) override {
+            exp->Generate(write);
+            label = exp->label;
+            if (next) {
+                next->Generate(write);
+                label += ", " + next->label;
+            }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };

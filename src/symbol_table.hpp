@@ -19,4 +19,5 @@ class SymbolTableNode {
         std::shared_ptr<SymbolTableNode> parent;
 };
 
-extern std::shared_ptr<SymbolTableNode> CurrentSymbolTable;
+extern std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable;
+extern std::unordered_map<std::string, SymbolInfo> FuncTable;

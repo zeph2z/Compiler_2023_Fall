@@ -16,10 +16,11 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
-bool must_return = false, branch = false;
+bool must_return = false, branch = false, func_is_void = false;
 int cnt = 0, level = 0, block_cnt = 0;
 std::string kstr, last_br, true_block_name, false_block_name;
-std::shared_ptr<SymbolTableNode> CurrentSymbolTable;
+std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable;
+std::unordered_map<std::string, SymbolInfo> FuncTable;
 std::stack<int> while_stack;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {

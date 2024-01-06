@@ -1,0 +1,82 @@
+fun @add(@a: i32, @b: i32): i32 {
+%entry:
+    @b_1 = alloc i32
+    store @b, @b_1
+    @a_1 = alloc i32
+    store @a, @a_1
+    %0 = load @a_1
+    %1 = load @b_1
+    %2 = add %0, %1
+    ret %2
+}
+
+fun @sub(@a: i32, @b: i32): i32 {
+%entry:
+    @b_1 = alloc i32
+    store @b, @b_1
+    @a_1 = alloc i32
+    store @a, @a_1
+    %3 = load @a_1
+    %4 = load @b_1
+    %5 = sub %3, %4
+    ret %5
+}
+
+fun @mul(@a: i32, @b: i32): i32 {
+%entry:
+    @b_1 = alloc i32
+    store @b, @b_1
+    @a_1 = alloc i32
+    store @a, @a_1
+    %6 = load @a_1
+    %7 = load @b_1
+    %8 = mul %6, %7
+    ret %8
+}
+
+fun @div(@a: i32, @b: i32): i32 {
+%entry:
+    @b_1 = alloc i32
+    store @b, @b_1
+    @a_1 = alloc i32
+    store @a, @a_1
+    %9 = load @a_1
+    %10 = load @b_1
+    %11 = div %9, %10
+    ret %11
+}
+
+fun @main(): i32 {
+%entry:
+    @x_1 = alloc i32
+    store 1, @x_1
+    %12 = call @add(1, 2)
+    store %12, @x_1
+    %13 = ne 0, 1
+    %14 = ne 0, 0
+    %15 = or %13, %14
+    %16 = ne 0, 0
+    %17 = load @x_1
+    %18 = call @sub(1, %17)
+    %19 = ne 0, %18
+    %20 = and %16, %19
+    %21 = ne 0, %20
+    %22 = load @x_1
+    %23 = ne 0, %22
+    %24 = call @add(1, 2)
+    %25 = gt %24, 10
+    %26 = ne 0, %25
+    %27 = or %23, %26
+    %28 = call @div(%27, 5)
+    %29 = call @mul(3, %28)
+    %30 = ne 0, %29
+    %31 = or %21, %30
+    %32 = call @add(%15, %31)
+    @y_1 = alloc i32
+    store %32, @y_1
+    %33 = load @x_1
+    %34 = load @y_1
+    %35 = add %33, %34
+    ret %35
+}
+

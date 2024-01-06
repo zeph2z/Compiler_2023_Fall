@@ -30,7 +30,7 @@ using namespace std;
   BaseAST* ast_val;
 }
 
-%token INT RETURN CONST IF ELSE WHILE FOR BREAK CONTINUE
+%token INT RETURN CONST IF ELSE WHILE FOR BREAK CONTINUE VOID
 %token <int_val> INT_CONST
 %token <char_val> PLUS MINUS NOT TIMES DIVIDE MOD
 %token <str_val> IDENT LT GT LE GE EQ NE AND OR
@@ -41,6 +41,8 @@ using namespace std;
 %type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp LOrExp LAndExp EqExp RelExp
 // lv4
 %type <ast_val> Decl ConstDecl ConstDef ConstInitVal BlockItem LVal BType ConstExp VarDecl VarDef InitVal
+// lv8
+%type <ast_val> FuncFParams FuncFParam FuncRParams
 
 %type <int_val> Number
 %type <char_val> UnaryOp AddOp MulOp
@@ -55,6 +57,12 @@ CompUnit
     comp_unit->func_def = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
   }
+  | FuncDef CompUnit {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->next = move(ast);
+    ast = move(comp_unit);
+  }
   ;
 
 FuncDef
@@ -63,6 +71,14 @@ FuncDef
     ast->func_type = unique_ptr<BaseAST>($1);
     ast->ident = *$2;
     ast->block = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | FuncType IDENT '(' FuncFParams ')' Block {
+    auto ast = new FuncDefAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->ident = *$2;
+    ast->func_f_params = unique_ptr<BaseAST>($4);
+    ast->block = unique_ptr<BaseAST>($6);
     $$ = ast;
   }
   ;
@@ -199,6 +215,19 @@ UnaryExp
     ast->type = 1;
     ast->op = $1;
     ast->unary_exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | IDENT '(' ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = 2;
+    ast->ident = *$1;
+    $$ = ast;
+  }
+  | IDENT '(' FuncRParams ')' {
+    auto ast = new UnaryExpAST();
+    ast->type = 2;
+    ast->ident = *$1;
+    ast->func_r_params = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
   ;
@@ -437,11 +466,54 @@ InitVal
   }
   ;
 
+// lv8
+FuncFParams
+  : FuncFParam {
+    auto ast = new FuncFParamsAST();
+    ast->func_f_param = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | FuncFParam ',' FuncFParams {
+    auto ast = new FuncFParamsAST();
+    ast->func_f_param = unique_ptr<BaseAST>($1);
+    ast->next = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+FuncFParam
+  : BType IDENT {
+    auto ast = new FuncFParamAST();
+    ast->b_type = unique_ptr<BaseAST>($1);
+    ast->ident = *$2;
+    $$ = ast;
+  }
+  ;
+
+FuncRParams
+  : Exp {
+    auto ast = new FuncRParamsAST();
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Exp ',' FuncRParams {
+    auto ast = new FuncRParamsAST();
+    ast->exp = unique_ptr<BaseAST>($1);
+    ast->next = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
 // not ast_val
 BType
   : INT {
     auto ast = new BTypeAST();
     ast->label = "int";
+    $$ = ast;
+  }
+  | VOID {
+    auto ast = new BTypeAST();
+    ast->label = "void";
     $$ = ast;
   }
   ;
