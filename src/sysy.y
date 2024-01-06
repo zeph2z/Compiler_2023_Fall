@@ -138,6 +138,13 @@ Stmt
     ast->else_stmt = unique_ptr<BaseAST>($7);
     $$ = ast;
   }
+  | WHILE '(' Exp ')' Stmt {
+    auto ast = new StmtAST();
+    ast->type = 5;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
   ;
 
 // lv3

@@ -138,6 +138,7 @@ class BlockItemAST : public BaseAST {
 
 // Stmt ::= "return" [Exp] ";" | LVal "=" Exp ";" | [Exp] ';' | Block;
 // Stmt ::= "if" "(" Exp ")" Stmt ["else" Stmt];
+// Stmt ::= "while" "(" Exp ")" Stmt;
 class StmtAST : public BaseAST {
     public:
         int type;
@@ -226,6 +227,26 @@ class StmtAST : public BaseAST {
                     kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
                     last_br.clear();
                 }
+            }
+            else if (type == 5) {
+                int _block_cnt = block_cnt++;
+                kstr += "    jump %while_entry_" + std::to_string(_block_cnt) + "\n\n";
+            
+                kstr += "%while_entry_" + std::to_string(_block_cnt) + ":\n";
+                true_block_name = "%while_body_" + std::to_string(_block_cnt);
+                false_block_name = "%end_" + std::to_string(_block_cnt);
+                branch = true;
+                exp->Generate(true);
+                branch = false;
+                kstr += "    br " + exp->label + ", " + "%while_body_" + std::to_string(_block_cnt) + ", " + "%end_" + std::to_string(_block_cnt) + "\n\n";
+            
+                kstr += "%while_body_" + std::to_string(_block_cnt) + ":\n";
+                last_br.clear();
+                stmt->Generate(true);
+                if (!last_is_br()) kstr += "    jump %while_entry_" + std::to_string(_block_cnt) + "\n\n";
+
+                kstr += "%end_" + std::to_string(_block_cnt) + ":\n";
+                last_br.clear();
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}

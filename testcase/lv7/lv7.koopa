@@ -1,0 +1,11 @@
+fun @main(): i32 {
+%entry:
+    jump %while_entry_0
+
+%while_entry_0:
+    br 1, %while_body_0, %end_0
+
+%while_body_0:
+    ret 1
+%end_0:
+}
