@@ -14,13 +14,22 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
-int cnt = 0, level = 0;
-std::string kstr;
+
+bool must_return = false;
+int cnt = 0, level = 0, block_cnt = 0;
+std::string kstr, last_br;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
     os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
     return os;
+}
+
+bool last_is_br() {
+    if (last_br == "br" || last_br == "jump" || last_br == "ret") {
+        return true;
+    }
+    return false;
 }
 
 int main(int argc, const char *argv[]) {
@@ -34,7 +43,7 @@ int main(int argc, const char *argv[]) {
   assert(yyin);
 
   extern int yydebug;
-  yydebug = 1;
+  yydebug = 0;
 
   unique_ptr<BaseAST> ast;
   auto retp = yyparse(ast);

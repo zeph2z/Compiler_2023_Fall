@@ -5,10 +5,12 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern int cnt, level;
-extern std::string kstr;
+extern bool must_return;
+extern int cnt, level, block_cnt;
+extern std::string kstr, last_br;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
+extern bool last_is_br();
 
 class BaseAST {
     public:
@@ -99,7 +101,7 @@ class BlockAST : public BaseAST {
             }
             if (block_item) block_item->Generate(write);
             CurrentSymbolTable = CurrentSymbolTable->parent;
-            level--;
+            must_return = false;
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -135,12 +137,15 @@ class BlockItemAST : public BaseAST {
 };
 
 // Stmt ::= "return" [Exp] ";" | LVal "=" Exp ";" | [Exp] ';' | Block;
+// Stmt ::= "if" "(" Exp ")" Stmt ["else" Stmt];
 class StmtAST : public BaseAST {
     public:
         int type;
         std::unique_ptr<BaseAST> l_val;
         std::unique_ptr<BaseAST> exp;
         std::unique_ptr<BaseAST> block;
+        std::unique_ptr<BaseAST> stmt;
+        std::unique_ptr<BaseAST> else_stmt;
 
         void Dump() const override {
             std::cout << "StmtAST { ";
@@ -148,13 +153,14 @@ class StmtAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            if (type == 0) {
+            if (type == 0 && !must_return && !last_is_br()) {
                 if (exp) {
                     exp->Generate(true);
                     kstr += "    ret " + exp->label + "\n";
                 }
                 else
                     kstr += "    ret\n";
+                last_br = "ret";
             }
             else if (type == 1) {
                 exp->Generate(true);
@@ -162,7 +168,7 @@ class StmtAST : public BaseAST {
                 while (it) {
                     auto it2 = it->table.find(l_val->label);
                     if (it2 != it->table.end()) {
-                        kstr += "    store " + exp->label + ", @" + l_val->label + "_" + std::to_string(it2->second.level) + "\n\n";
+                        kstr += "    store " + exp->label + ", @" + l_val->label + "_" + std::to_string(it2->second.level) + "\n";
                         break;
                     }
                     it = it->parent;
@@ -177,6 +183,39 @@ class StmtAST : public BaseAST {
             }
             else if (type == 3) {
                 block->Generate(write);
+            }
+            else if (type == 4) {
+                exp->Generate(true);
+                int _block_cnt = block_cnt++;
+                if (else_stmt) {
+                    // br %0, %then_0, %else_0
+                    kstr += "    br " + exp->label + ", %then_" + std::to_string(_block_cnt) + ", %else_" + std::to_string(_block_cnt) + "\n\n";
+                    
+                    kstr += "%then_" + std::to_string(_block_cnt) + ":\n";
+                    last_br.clear();
+                    stmt->Generate(true);
+                    bool first_is_ret = last_br == "ret";
+                    if (!last_is_br()) kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n"; 
+                    
+                    kstr += "\n%else_" + std::to_string(_block_cnt) + ":\n";
+                    last_br.clear();
+                    else_stmt->Generate(true);
+                    bool second_is_ret = last_br == "ret";
+                    if (!last_is_br()) kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n";
+                    
+                    must_return = first_is_ret && second_is_ret;
+                    if (!must_return) kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
+                }
+                else {
+                    kstr += "    br " + exp->label + ", %then_" + std::to_string(_block_cnt) + ", %end_" + std::to_string(_block_cnt) + "\n\n";
+                    kstr += "%then_" + std::to_string(_block_cnt) + ":\n";
+                    last_br.clear();
+                    stmt->Generate(true);
+                    if (!last_is_br()) kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n\n"; 
+                    
+                    kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
+                    last_br.clear();
+                }
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -807,8 +846,8 @@ class VarDefAST : public BaseAST {
             CurrentSymbolTable->table[ident] = info;
             if (info.type == "int") {
                 kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";
-                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n\n";
-                else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n\n";
+                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n";
+                else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n";
             }
             if (next)
                 next->AddtoSymbolTable(str, false);

@@ -30,7 +30,7 @@ using namespace std;
   BaseAST* ast_val;
 }
 
-%token INT RETURN CONST
+%token INT RETURN CONST IF ELSE WHILE FOR BREAK CONTINUE
 %token <int_val> INT_CONST
 %token <char_val> PLUS MINUS NOT TIMES DIVIDE MOD
 %token <str_val> IDENT LT GT LE GE EQ NE AND OR
@@ -121,6 +121,21 @@ Stmt
     auto ast = new StmtAST();
     ast->type = 3;
     ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt {
+    auto ast = new StmtAST();
+    ast->type = 4;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt ELSE Stmt {
+    auto ast = new StmtAST();
+    ast->type = 4;
+    ast->exp = unique_ptr<BaseAST>($3);
+    ast->stmt = unique_ptr<BaseAST>($5);
+    ast->else_stmt = unique_ptr<BaseAST>($7);
     $$ = ast;
   }
   ;
@@ -404,10 +419,6 @@ InitVal
     $$ = ast;
   }
   ;
-
-// lv5
-
-
 
 // not ast_val
 BType
