@@ -89,11 +89,34 @@ Stmt
     ast->type = 0;
     ast->exp = unique_ptr<BaseAST>($2);
     $$ = ast;
-  } | LVal '=' Exp ';' {
+  }
+  | RETURN ';' {
+    auto ast = new StmtAST();
+    ast->type = 0;
+    $$ = ast;
+  }
+  | LVal '=' Exp ';' {
     auto ast = new StmtAST();
     ast->type = 1;
     ast->l_val = unique_ptr<BaseAST>($1);
     ast->exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | Exp ';' {
+    auto ast = new StmtAST();
+    ast->type = 2;
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | ';' {
+    auto ast = new StmtAST();
+    ast->type = 2;
+    $$ = ast;
+  }
+  | Block {
+    auto ast = new StmtAST();
+    ast->type = 3;
+    ast->block = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
@@ -377,6 +400,10 @@ InitVal
     $$ = ast;
   }
   ;
+
+// lv5
+
+
 
 // not ast_val
 BType

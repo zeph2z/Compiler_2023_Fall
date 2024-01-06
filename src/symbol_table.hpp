@@ -10,6 +10,13 @@ class SymbolInfo {
         std::string type;
         bool is_const;
         int value;
+        int level;
 };
 
-extern std::unordered_map<std::string, SymbolInfo> SymbolTable;
+class SymbolTableNode {
+    public:
+        std::unordered_map<std::string, SymbolInfo> table;
+        std::shared_ptr<SymbolTableNode> parent;
+};
+
+extern std::shared_ptr<SymbolTableNode> CurrentSymbolTable;

@@ -5,9 +5,8 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern int cnt;
+extern int cnt, level;
 extern std::string kstr;
-extern std::unordered_map<std::string, SymbolInfo> SymbolTable;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
 
@@ -58,8 +57,9 @@ class FuncDefAST : public BaseAST {
         void Generate(bool write = true) override {
             kstr += "fun @" + ident + "(): ";
             func_type->Generate(write);
-            kstr += " ";
+            kstr += " {\n%entry:\n";
             block->Generate(write);
+            kstr += "}";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -89,9 +89,17 @@ class BlockAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            kstr += "{\n%entry:\n";
+            level++;
+            if (CurrentSymbolTable == nullptr)
+                CurrentSymbolTable = std::make_shared<SymbolTableNode>();
+            else {
+                std::shared_ptr<SymbolTableNode> new_table = std::make_shared<SymbolTableNode>();
+                new_table->parent = CurrentSymbolTable;
+                CurrentSymbolTable = new_table;
+            }
             block_item->Generate(write);
-            kstr += "}\n";
+            CurrentSymbolTable = CurrentSymbolTable->parent;
+            level--;
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -126,12 +134,13 @@ class BlockItemAST : public BaseAST {
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// Stmt ::= "return" Exp ";" | LVal "=" Exp ";";
+// Stmt ::= "return" [Exp] ";" | LVal "=" Exp ";" | [Exp] ';' | Block;
 class StmtAST : public BaseAST {
     public:
         int type;
         std::unique_ptr<BaseAST> l_val;
         std::unique_ptr<BaseAST> exp;
+        std::unique_ptr<BaseAST> block;
 
         void Dump() const override {
             std::cout << "StmtAST { ";
@@ -139,11 +148,37 @@ class StmtAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            exp->Generate(true);
-            if (type == 0)
-                kstr += "    ret " + exp->label + "\n";
-            else if (type == 1)
-                kstr += "    store " + exp->label + ", @" + l_val->label + "\n\n";
+            if (type == 0) {
+                if (exp) {
+                    exp->Generate(true);
+                    kstr += "    ret " + exp->label + "\n";
+                }
+                else
+                    kstr += "    ret\n";
+            }
+            else if (type == 1) {
+                exp->Generate(true);
+                auto it = CurrentSymbolTable;
+                while (it) {
+                    auto it2 = it->table.find(l_val->label);
+                    if (it2 != it->table.end()) {
+                        kstr += "    store " + exp->label + ", @" + l_val->label + "_" + std::to_string(it2->second.level) + "\n\n";
+                        break;
+                    }
+                    it = it->parent;
+                }
+            }
+            else if (type == 2) {
+                if (exp) {
+                    exp->Generate(true);
+                    kstr += "    " + exp->label + "\n";
+                }
+                else
+                    kstr += "\n";
+            }
+            else if (type == 3) {
+                block->Generate(write);
+            }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -249,21 +284,26 @@ class PrimaryExpAST : public BaseAST {
                 value = exp->value;
             }
             else if (type == 1) {
-                auto it = SymbolTable.find(l_val->label);
-                value = 0;
-                if (it != SymbolTable.end()) {
-                    if (it->second.is_const) {
-                        label = std::to_string(it->second.value);
-                        value = it->second.value;}
-                    else {
-                        if (write) {
-                            kstr += "    %" + std::to_string(cnt++) + " = load @" + l_val->label + "\n"; 
-                            label = "%" + std::to_string(cnt - 1);
+                auto it = CurrentSymbolTable;
+                while (it) {
+                    auto it2 = it->table.find(l_val->label);
+                    if (it2 != it->table.end()) {
+                        if (it2->second.is_const) {
+                            label = std::to_string(it2->second.value);
+                            value = it2->second.value;
                         }
-                        value = it->second.value;
+                        else {
+                            if (write) {
+                                kstr += "    %" + std::to_string(cnt++) + " = load @" + it2->first + "_" + std::to_string(it2->second.level) + "\n"; 
+                                label = "%" + std::to_string(cnt - 1);
+                            }
+                            value = it2->second.value;
+                        }
+                        break;
                     }
+                    it = it->parent;
                 }
-                else label = "err";
+                if (!it) label = "err";
             }
             else if (type == 2) {
                 if (write) label = std::to_string(number);
@@ -661,7 +701,8 @@ class ConstDefAST : public BaseAST {
             const_init_val->Generate(false);
             info.value = const_init_val->value;
             info.is_const = is_const;
-            SymbolTable[ident] = info;
+            info.level = level;
+            CurrentSymbolTable->table[ident] = info;
             if (next)
                 next->AddtoSymbolTable(str, true);
         }
@@ -761,12 +802,14 @@ class VarDefAST : public BaseAST {
             SymbolInfo info;
             info.type = str;
             info.value = 0;
+            info.is_const = is_const;
             if (init_val) init_val->Generate(true);
-            SymbolTable[ident] = info;
+            info.level = level;
+            CurrentSymbolTable->table[ident] = info;
             if (info.type == "int") {
-                kstr += "    @" + ident + " = alloc i32\n";
-                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "\n\n";
-                else kstr += "    store 0, @" + ident + "\n\n";
+                kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";
+                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n\n";
+                else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n\n";
             }
             if (next)
                 next->AddtoSymbolTable(str, false);

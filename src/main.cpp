@@ -14,12 +14,12 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
-int cnt = 0;
+int cnt = 0, level = 0;
 std::string kstr;
-std::unordered_map<std::string, SymbolInfo> SymbolTable;
+std::shared_ptr<SymbolTableNode> CurrentSymbolTable;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
-    os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const;
+    os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
     return os;
 }
 
@@ -41,11 +41,8 @@ int main(int argc, const char *argv[]) {
   assert(!retp);
 
   ast->Generate();
-  for (const auto& pair : SymbolTable) {
-    std::cout << "key: " << pair.first << ", " << pair.second << std::endl;
-  }
   cout << endl;
-  
+
   FILE *yyout = fopen(output, "w");
   assert(yyout);
   fprintf(yyout, "%s", kstr.c_str());
