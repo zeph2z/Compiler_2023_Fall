@@ -19,7 +19,7 @@ std::string kstr;
 std::unordered_map<std::string, SymbolInfo> SymbolTable;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
-    os << "type: " << info.type << ", value: " << info.value;
+    os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const;
     return os;
 }
 
@@ -40,8 +40,10 @@ int main(int argc, const char *argv[]) {
   auto retp = yyparse(ast);
   assert(!retp);
 
-  ast->Dump();
   ast->Generate();
+  for (const auto& pair : SymbolTable) {
+    std::cout << "key: " << pair.first << ", " << pair.second << std::endl;
+  }
   cout << endl;
 
   FILE *yyout = fopen(output, "w");

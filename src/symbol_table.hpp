@@ -8,6 +8,7 @@
 class SymbolInfo {
     public:
         std::string type;
+        bool is_const;
         int value;
 };
 

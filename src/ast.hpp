@@ -19,7 +19,7 @@ class BaseAST {
 
         virtual void Dump() const = 0;
         virtual void Generate(bool write = true) = 0;
-        virtual void CreateSymbolTable(std::string str) = 0;
+        virtual void AddtoSymbolTable(std::string str, bool is_const) = 0;
         // virtual std::string GetIdent() { return ""; };
 
         virtual ~BaseAST() = default;
@@ -38,7 +38,7 @@ class CompUnitAST : public BaseAST {
         void Generate(bool write = true) override {
             func_def->Generate(write);
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // FuncDef ::= FuncType IDENT "(" ")" Block ;
@@ -61,7 +61,7 @@ class FuncDefAST : public BaseAST {
             kstr += " ";
             block->Generate(write);
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // FuncType ::= BType;
@@ -75,7 +75,7 @@ class FuncTypeAST : public BaseAST {
         void Generate(bool write = true) override {
             kstr += "i32";
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // Block ::= "{" {BlockItem} "}";
@@ -93,7 +93,7 @@ class BlockAST : public BaseAST {
             block_item->Generate(write);
             kstr += "}\n";
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // BlockItem ::= Decl | Stmt;
@@ -123,13 +123,14 @@ class BlockItemAST : public BaseAST {
                 next->Generate(write);
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// Stmt ::= "return" Exp ";";
+// Stmt ::= "return" Exp ";" | LVal "=" Exp ";";
 class StmtAST : public BaseAST {
     public:
-        std::string kind;
+        int type;
+        std::unique_ptr<BaseAST> l_val;
         std::unique_ptr<BaseAST> exp;
 
         void Dump() const override {
@@ -138,13 +139,13 @@ class StmtAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            exp->Generate(write);
-            kstr += "    ";
-            if (kind == "return")
-                kstr += "ret";
-            kstr += " " + exp->label + "\n";
+            exp->Generate(true);
+            if (type == 0)
+                kstr += "    ret " + exp->label + "\n";
+            else if (type == 1)
+                kstr += "    store " + exp->label + ", @" + l_val->label + "\n";
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // Exp ::= LOrExp;
@@ -162,7 +163,7 @@ class ExpAST : public BaseAST {
             if (write) label = lor_exp->label;
             value = lor_exp->value;
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // UnaryExp ::= PrimaryExp | UnaryOp UnaryExp;
@@ -218,7 +219,7 @@ class UnaryExpAST : public BaseAST {
                 }
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // PrimaryExp ::= "(" Exp ")" | LVal | Number;
@@ -251,8 +252,16 @@ class PrimaryExpAST : public BaseAST {
                 auto it = SymbolTable.find(l_val->label);
                 value = 0;
                 if (it != SymbolTable.end()) {
-                    label = std::to_string(it->second.value);
-                    value = it->second.value;
+                    if (it->second.is_const) {
+                        label = std::to_string(it->second.value);
+                        value = it->second.value;}
+                    else {
+                        if (write) {
+                            kstr += "    %" + std::to_string(cnt++) + " = load @" + l_val->label + "\n"; 
+                            label = "%" + std::to_string(cnt - 1);
+                        }
+                        value = it->second.value;
+                    }
                 }
                 else label = "err";
             }
@@ -261,7 +270,7 @@ class PrimaryExpAST : public BaseAST {
                 value = number;
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // AddExp ::= MulExp | AddExp ("+" | "-") MulExp;
@@ -316,7 +325,7 @@ class AddExpAST : public BaseAST {
                 }
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // MulExp ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
@@ -379,7 +388,7 @@ class MulExpAST : public BaseAST {
                 }
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // RelExp ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
@@ -444,7 +453,7 @@ class RelExpAST : public BaseAST {
                 }
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // EqExp ::= RelExp | EqExp ("==" | "!=") RelExp;
@@ -495,7 +504,7 @@ class EqExpAST : public BaseAST {
                 }
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // LAndExp ::= EqExp | LAndExp "&&" EqExp;
@@ -542,7 +551,7 @@ class LAndExpAST : public BaseAST {
                 value = land_exp->value && eq_exp->value;
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // LOrExp ::= LAndExp | LOrExp "||" LAndExp;
@@ -589,23 +598,27 @@ class LOrExpAST : public BaseAST {
                 value = lor_exp->value || land_exp->value;
             }
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// Decl ::= ConstDecl;
+// Decl ::= ConstDecl | VarDecl;
 class DeclAST : public BaseAST {
     public:
+        int type;
         std::unique_ptr<BaseAST> const_decl;
+        std::unique_ptr<BaseAST> var_decl;
 
         void Dump() const override {
             std::cout << "DeclAST { ";
-            const_decl->Dump();
+            if (type == 0) const_decl->Dump();
+            else if (type == 1) var_decl->Dump();
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            const_decl->Generate(write);
+            if (type == 0) const_decl->Generate(false);
+            if (type == 1) var_decl->Generate(write);
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // ConstDecl ::= "const" BType ConstDef ";";
@@ -620,12 +633,9 @@ class ConstDeclAST : public BaseAST {
             std::cout << " }";
         }
         void Generate(bool write = true) override {
-            const_def->CreateSymbolTable(b_type->label);
-            for (const auto& pair : SymbolTable) {
-                std::cout << "Key: " << pair.first << " Value: " << pair.second << std::endl;
-            }
+            const_def->AddtoSymbolTable(b_type->label, true);
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // ConstDef ::= IDENT "=" ConstInitVal | IDENT "=" ConstInitVal "," ConstDef;
@@ -645,14 +655,15 @@ class ConstDefAST : public BaseAST {
             }
         }
         void Generate(bool write = true) override {}
-        void CreateSymbolTable(std::string str) override {
+        void AddtoSymbolTable(std::string str, bool is_const) override {
             SymbolInfo info;
             info.type = str;
             const_init_val->Generate(false);
             info.value = const_init_val->value;
+            info.is_const = is_const;
             SymbolTable[ident] = info;
             if (next)
-                next->CreateSymbolTable(str);
+                next->AddtoSymbolTable(str, true);
         }
 };
 
@@ -671,7 +682,7 @@ class ConstInitValAST : public BaseAST {
             if (write) label = const_exp->label;
             value = const_exp->value;
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // ConstExp ::= Exp;
@@ -689,7 +700,7 @@ class ConstExpAST : public BaseAST {
             if (write) label = exp->label;
             value = exp->value;
         }
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
 // LVal ::= IDENT;
@@ -699,14 +710,85 @@ class LValAST : public BaseAST {
             std::cout << "LValAST { " << label << " }";
         }
         void Generate(bool write = true) override {}
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
+// BType ::= INT;
 class BTypeAST : public BaseAST {
     public:
         void Dump() const override {
             std::cout << "BTypeAST { " << label << " }";
         }
         void Generate(bool write = true) override {}
-        void CreateSymbolTable(std::string str) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
+};
+
+// VarDecl ::= BType VarDef ";";
+class VarDeclAST : public BaseAST {
+    public:
+        std::unique_ptr<BaseAST> b_type;
+        std::unique_ptr<BaseAST> var_def;
+
+        void Dump() const override {
+            std::cout << "VarDeclAST { " << b_type->label << ", ";
+            var_def->Dump();
+            std::cout << " }";
+        }
+        void Generate(bool write = true) override {
+            var_def->AddtoSymbolTable(b_type->label, false);
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
+};
+
+// VarDef ::= IDENT | IDENT "=" InitVal | IDENT ',' VarDef | IDENT "=" InitVal "," VarDef;
+class VarDefAST : public BaseAST {
+    public:
+        std::string ident;
+        std::unique_ptr<BaseAST> init_val = nullptr;
+
+        void Dump() const override {
+            std::cout << "VarDefAST { ";
+            std::cout << ident << ", ";
+            init_val->Dump();
+            std::cout << " }";
+            if (next) {
+                std::cout << ", ";
+                next->Dump();
+            }
+        }
+        void Generate(bool write = true) override {}
+        void AddtoSymbolTable(std::string str, bool is_const) override {
+            SymbolInfo info;
+            info.type = str;
+            info.value = 0;
+            if (init_val) {
+                init_val->Generate(false);
+                info.value = init_val->value;
+            }
+            SymbolTable[ident] = info;
+            if (info.type == "int") {
+                kstr += "    @" + ident + " = alloc i32\n";
+                kstr += "    store " + std::to_string(info.value) + ", @" + ident + "\n";
+            }
+            if (next)
+                next->AddtoSymbolTable(str, false);
+        }
+};
+
+// InitVal ::= Exp;
+class InitValAST : public BaseAST {
+    public:
+        std::unique_ptr<BaseAST> exp;
+
+        void Dump() const override {
+            std::cout << "InitValAST { ";
+            exp->Dump();
+            std::cout << " }";
+        }
+        void Generate(bool write = true) override {
+            exp->Generate(write);
+            if (write) label = exp->label;
+            value = exp->value;
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
 };

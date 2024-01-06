@@ -1,0 +1,39 @@
+running test "00_const" ... PASSED
+running test "01_const_expr" ... PASSED
+running test "02_multiple_consts" ... PASSED
+running test "03_complex_const" ... PASSED
+running test "04_var" ... CASE COMPILE ERROR
+stdout:
+
+stderr:
+
+running test "05_var_init" ... PASSED
+running test "06_var_expr" ... PASSED
+running test "07_var_main" ... PASSED
+running test "08_multiple_vars" ... CASE COMPILE ERROR
+stdout:
+
+stderr:
+error: syntax error
+compiler: /root/compiler/src/main.cpp:41: int main(int, const char **): Assertion `!retp' failed.
+
+running test "09_complex_vars" ... PASSED
+running test "10_assign" ... CASE COMPILE ERROR
+stdout:
+
+stderr:
+
+running test "11_assign_read" ... WRONG ANSWER
+your answer:
+1
+running test "12_multiple_assigns" ... CASE COMPILE ERROR
+stdout:
+
+stderr:
+
+running test "13_complex" ... CASE COMPILE ERROR
+stdout:
+
+stderr:
+
+WRONG ANSWER (8/14)
