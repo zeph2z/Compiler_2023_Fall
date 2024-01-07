@@ -61,46 +61,36 @@ fun @div(@a: i32, @b: i32): i32 {
 
 fun @main(): i32 {
 %entry:
-    %12 = call @sub(1, 2)
-    %13 = call @div(4, 5)
-    %14 = call @mul(3, %13)
-    %15 = call @add(%12, %14)
+    @temp_0 = alloc i32
+    br 0, %true_0, %false_0
+
+%true_0:
+    store 1, @temp_0
+    jump %final_0
+
+%false_0:
+    @temp_1 = alloc i32
+    br 1, %true_1, %false_1
+
+%true_1:
+    store 2, @temp_1
+    jump %final_1
+
+%false_1:
+    store 0, @temp_1
+    jump %final_1
+
+%final_1:
+    %12 = load @temp_1
+    store %12, @temp_0
+    jump %final_0
+
+%final_0:
+    %13 = load @temp_0
     @x_1 = alloc i32
-    store %15, @x_1
-    %16 = ne 0, 1
-    br %16, %logic_true_0, %logic_false_0
-
-%logic_false_0:
-    %17 = ne 0, 0
-    %18 = ne 0, 0
-    br %18, %logic_true_2, %logic_false_0
-
-%logic_true_2:
-    %19 = load @x_1
-    %20 = call @sub(1, %19)
-    %21 = ne 0, %20
-    %22 = ne 0, %21
-    br %22, %logic_true_0, %logic_false_1
-
-%logic_false_1:
-    %23 = load @x_1
-    %24 = ne 0, %23
-    br %24, %logic_true_0, %logic_false_3
-
-%logic_false_3:
-    %25 = call @add(1, 2)
-    %26 = gt %25, 10
-    %27 = ne 0, %26
-    %28 = call @div(%27, 5)
-    %29 = call @mul(3, %28)
-    %30 = ne 0, %29
-    %31 = call @add(%17, %30)
-    @y_1 = alloc i32
-    store %31, @y_1
-    %32 = load @x_1
-    %33 = load @y_1
-    %34 = add %32, %33
-    ret %34
+    store %13, @x_1
+    %14 = load @x_1
+    ret %14
 }
 
 

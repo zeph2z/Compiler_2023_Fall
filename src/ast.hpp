@@ -7,7 +7,7 @@
 #include "symbol_table.hpp"
 
 extern bool must_return, branch, func_is_void, has_left, global;
-extern int cnt, level, block_cnt;
+extern int cnt, level, block_cnt, logic_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name;
 extern std::stack<int> while_stack;
 
@@ -646,25 +646,29 @@ class LAndExpAST : public BaseAST {
             }
             else if (type == 1) {
                 if (write) {
-                    land_exp->Generate(write);
-                    std::string label1 = "%" + std::to_string(cnt++);
-                    // %2 = ne 0, %0
-                    kstr += "    " + label1 + " = ne 0, " + land_exp->label + "\n";
-                    if (branch) {
-                        kstr += "    br " + label1 + ", %logic_true_" + std::to_string(block_cnt) + ", " + false_block_name + "\n\n";
-                        kstr += "%logic_true_" + std::to_string(block_cnt++) + ":\n";
-                    }
+                    int _logic_cnt = logic_cnt++;
+                    std::string label_var = "@temp_" + std::to_string(_logic_cnt);
+                    std::string _true = "%true_" + std::to_string(_logic_cnt);
+                    std::string _false = "%false_" + std::to_string(_logic_cnt);
+                    std::string _final = "%final_" + std::to_string(_logic_cnt);
 
+                    kstr += "    " + label_var + " = alloc i32\n";
+
+                    land_exp->Generate(write);
+                    kstr += "    br " + land_exp->label + ", " + _true + ", " + _false + "\n\n";
+
+                    kstr += _true + ":\n";
                     eq_exp->Generate(write);
-                    std::string label2 = "%" + std::to_string(cnt++);
-                    // %3 = ne 0, %1
-                    kstr += "    " + label2 + " = ne 0, " + eq_exp->label + "\n";
-                    // %4 = and %2, %3
-                    if (branch) label = label2;
-                    else {
-                        label = "%" + std::to_string(cnt++);
-                        kstr += "    " + label + " = and " + label1 + ", " + label2 + "\n";
-                    }
+                    kstr += "    store " + eq_exp->label + ", " + label_var + "\n";
+                    kstr += "    jump " + _final + "\n\n";
+
+                    kstr += _false + ":\n";
+                    kstr += "    store 0, " + label_var + "\n";
+                    kstr += "    jump " + _final + "\n\n";
+
+                    kstr += _final + ":\n";
+                    label = "%" + std::to_string(cnt++);
+                    kstr += "    " + label + " = load " + label_var + "\n";
                 }
                 else {
                     land_exp->Generate(write);
@@ -691,25 +695,29 @@ class LOrExpAST : public BaseAST {
             }
             else if (type == 1) {
                 if (write) {
+                    int _logic_cnt = logic_cnt++;
+                    std::string label_var = "@temp_" + std::to_string(_logic_cnt);
+                    std::string _true = "%true_" + std::to_string(_logic_cnt);
+                    std::string _false = "%false_" + std::to_string(_logic_cnt);
+                    std::string _final = "%final_" + std::to_string(_logic_cnt);
+
+                    kstr += "    " + label_var + " = alloc i32\n";
+
                     lor_exp->Generate(write);
-                    std::string label1 = "%" + std::to_string(cnt++);
-                    // %2 = ne 0, %0
-                    kstr += "    " + label1 + " = ne 0, " + lor_exp->label + "\n";
-                    if (branch) {
-                        kstr += "    br " + label1 + ", " + true_block_name + ", %logic_false_" + std::to_string(block_cnt) + "\n\n";
-                        kstr += "%logic_false_" + std::to_string(block_cnt++) + ":\n";
-                    }
-                    
+                    kstr += "    br " + lor_exp->label + ", " + _true + ", " + _false + "\n\n";
+
+                    kstr += _true + ":\n";
+                    kstr += "    store 1, " + label_var + "\n";
+                    kstr += "    jump " + _final + "\n\n";
+
+                    kstr += _false + ":\n";
                     land_exp->Generate(write);
-                    std::string label2 = "%" + std::to_string(cnt++);
-                    // %3 = ne 0, %1
-                    kstr += "    " + label2 + " = ne 0, " + land_exp->label + "\n";
-                    // %4 = or %2, %3
-                    if (branch) label = label2;
-                    else {
-                        label = "%" + std::to_string(cnt++);
-                        kstr += "    " + label + " = or " + label1 + ", " + label2 + "\n";
-                    }
+                    kstr += "    store " + land_exp->label + ", " + label_var + "\n";
+                    kstr += "    jump " + _final + "\n\n";
+
+                    kstr += _final + ":\n";
+                    label = "%" + std::to_string(cnt++);
+                    kstr += "    " + label + " = load " + label_var + "\n";
                 }
                 else {
                     lor_exp->Generate(write);
