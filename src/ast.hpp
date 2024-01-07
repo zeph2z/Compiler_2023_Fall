@@ -668,7 +668,8 @@ class LAndExpAST : public BaseAST {
 
                     kstr += _final + ":\n";
                     label = "%" + std::to_string(cnt++);
-                    kstr += "    " + label + " = load " + label_var + "\n";
+                    kstr += "    %" + std::to_string(cnt++) + " = load " + label_var + "\n";
+                    kstr += "    " + label + " = ne 0, %" + std::to_string(cnt - 1) + "\n";
                 }
                 else {
                     land_exp->Generate(write);
@@ -717,7 +718,8 @@ class LOrExpAST : public BaseAST {
 
                     kstr += _final + ":\n";
                     label = "%" + std::to_string(cnt++);
-                    kstr += "    " + label + " = load " + label_var + "\n";
+                    kstr += "    %" + std::to_string(cnt++) + " = load " + label_var + "\n";
+                    kstr += "    " + label + " = ne 0, %" + std::to_string(cnt - 1) + "\n";
                 }
                 else {
                     lor_exp->Generate(write);
