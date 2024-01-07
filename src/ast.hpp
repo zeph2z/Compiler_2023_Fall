@@ -6,7 +6,7 @@
 #include <string>
 #include "symbol_table.hpp"
 
-extern bool must_return, branch, func_is_void, has_left;
+extern bool must_return, branch, func_is_void, has_left, global;
 extern int cnt, level, block_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name;
 extern std::stack<int> while_stack;
@@ -16,7 +16,7 @@ extern bool last_is_br();
 
 class BaseAST {
     public:
-        std::string label;
+        std::string label, pass_ident;
         int value;
         std::unique_ptr<BaseAST> next = nullptr;
 
@@ -26,19 +26,98 @@ class BaseAST {
         virtual ~BaseAST() = default;
 };
 
-// CompUnit ::= [CompUnit] FuncDef;
+// CompUnit ::= (ConstDecl | FuncType IDENT RestCompUnit) [CompUnit];
 class CompUnitAST : public BaseAST {
     public:
-        std::unique_ptr<BaseAST> func_def;
+        int type;
+        std::unique_ptr<BaseAST> const_decl;
+        std::unique_ptr<BaseAST> func_type;
+        std::string ident;
+        std::unique_ptr<BaseAST> rest_comp_unit;
 
         void Generate(bool write = true) override {
-            func_def->Generate(write);
+            if (type == 0) {
+                global = true;
+                CurrentSymbolTable = GlobalSymbolTable;
+                const_decl->Generate(false);
+                global = false;
+                CurrentSymbolTable = nullptr;
+            }
+            else if (type == 1) {
+                rest_comp_unit->label = func_type->label;
+                rest_comp_unit->pass_ident = ident;
+                rest_comp_unit->Generate(write);
+                kstr += "\n";
+            }
             if (next) next->Generate(write);
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// FuncDef ::= FuncType IDENT "(" [FuncFParams] ")" Block ;
+// RestCompUnit ::= "(" [FuncFParams] ")" Block | ["=" InitVal] {"," VarDef} ";";
+class RestCompUnitAST : public BaseAST {
+    public:
+        int type;
+        std::unique_ptr<BaseAST> init_val;
+        std::unique_ptr<BaseAST> func_f_params;
+        std::unique_ptr<BaseAST> block;
+        std::unique_ptr<BaseAST> var_def;
+
+        void Generate(bool write = true) override {
+            if (type == 0) {
+                FuncSymbolTable.reset(new SymbolTableNode());
+                CurrentSymbolTable.reset();
+                level = 0;
+                last_br.clear();
+                kstr += "fun @" + pass_ident + "(";
+                if (func_f_params) func_f_params->Generate(write);
+                kstr += ")";
+
+                if (label == "void") func_is_void = true;
+                else func_is_void = false;
+                if (label == "int") kstr += ": i32";
+
+                FuncTable[pass_ident].type = label;
+                for (const auto& pair : FuncSymbolTable->table) {
+                    std::cout << pair.first << " "  << pair.second << std::endl;
+                }
+
+                kstr += " {\n%entry:\n";
+                block->Generate(write);
+                if (func_is_void && !last_is_br()) kstr += "    ret\n"; 
+                kstr += "}\n\n";
+            }
+            else if (type == 1) {
+                CurrentSymbolTable = GlobalSymbolTable;
+                SymbolInfo info;
+                info.type = label;
+                info.value = 0;
+                info.is_const = false;
+                info.level = 0;
+                info.name = pass_ident;
+                if (init_val) {
+                    has_left = true;
+                    init_val->Generate(true);
+                    info.value = init_val->value;
+                    has_left = false;
+                }
+                GlobalSymbolTable->table[pass_ident] = info;
+                kstr += "global @" + info.name + " = alloc ";
+                if (info.type == "int")
+                    kstr += "i32";
+                if (init_val) kstr += ", " + std::to_string(init_val->value) + "\n";
+                else kstr += ", zeroinit\n";
+
+                global = true;
+                if (var_def) var_def->AddtoSymbolTable(label, false);
+                global = false;
+                CurrentSymbolTable = nullptr;
+            }
+        }
+        void AddtoSymbolTable(std::string str, bool is_const) override {}
+};
+
+// FuncDef ::= FuncType IDENT "(" [FuncFParams] ")" Block;
 class FuncDefAST : public BaseAST {
     public:
         std::unique_ptr<BaseAST> func_type;
@@ -72,10 +151,7 @@ class FuncDefAST : public BaseAST {
 // FuncType ::= BType;
 class FuncTypeAST : public BaseAST {
     public:
-        std::unique_ptr<BaseAST> b_type;
-
         void Generate(bool write = true) override {
-            label = b_type->label;
             if (label == "int") kstr += "i32 ";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -161,7 +237,7 @@ class StmtAST : public BaseAST {
                 while (it) {
                     auto it2 = it->table.find(l_val->label);
                     if (it2 != it->table.end()) {
-                        kstr += "    store " + exp->label + ", @" + l_val->label + "_" + std::to_string(it2->second.level) + "\n";
+                        kstr += "    store " + exp->label + ", @" + it2->second.name + "\n";
                         break;
                     }
                     it = it->parent;
@@ -317,7 +393,8 @@ class UnaryExpAST : public BaseAST {
             else if (type == 2) {
                 if (func_r_params) func_r_params->Generate(write);
                 if (write) {
-                    if (has_left) {
+                    std::string func_type = FuncTable[ident].type;
+                    if (has_left || func_type == "int") {
                         label = "%" + std::to_string(cnt++);
                         kstr += "    " + label + " = call @" + ident + "(";
                     }
@@ -355,7 +432,7 @@ class PrimaryExpAST : public BaseAST {
                         }
                         else {
                             if (write) {
-                                kstr += "    %" + std::to_string(cnt++) + " = load @" + it2->first + "_" + std::to_string(it2->second.level) + "\n"; 
+                                kstr += "    %" + std::to_string(cnt++) + " = load @" + it2->second.name + "\n"; 
                                 label = "%" + std::to_string(cnt - 1);
                             }
                             value = it2->second.value;
@@ -678,13 +755,26 @@ class ConstDefAST : public BaseAST {
 
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {
-            SymbolInfo info;
-            info.type = str;
-            const_init_val->Generate(false);
-            info.value = const_init_val->value;
-            info.is_const = is_const;
-            info.level = level;
-            CurrentSymbolTable->table[ident] = info;
+            if (global) {
+                SymbolInfo info;
+                info.type = str;
+                const_init_val->Generate(false);
+                info.value = const_init_val->value;
+                info.is_const = is_const;
+                info.level = 0;
+                info.name = ident;
+                GlobalSymbolTable->table[ident] = info;
+            }
+            else {
+                SymbolInfo info;
+                info.type = str;
+                const_init_val->Generate(false);
+                info.value = const_init_val->value;
+                info.is_const = is_const;
+                info.level = level;
+                info.name = ident + "_" + std::to_string(level);
+                CurrentSymbolTable->table[ident] = info;
+            }
             if (next)
                 next->AddtoSymbolTable(str, true);
         }
@@ -723,7 +813,7 @@ class LValAST : public BaseAST {
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// BType ::= INT | VOID;
+// BType ::= INT;
 class BTypeAST : public BaseAST {
     public:
         void Generate(bool write = true) override {}
@@ -750,21 +840,42 @@ class VarDefAST : public BaseAST {
 
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {
-            SymbolInfo info;
-            info.type = str;
-            info.value = 0;
-            info.is_const = is_const;
-            info.level = level;
-            if (init_val) {
-                has_left = true;
-                init_val->Generate(true);
-                has_left = false;
+            if (global) {
+                SymbolInfo info;
+                info.type = str;
+                info.value = 0;
+                info.is_const = is_const;
+                info.level = 0;
+                info.name = ident;
+                if (init_val) {
+                    has_left = true;
+                    init_val->Generate(true);
+                    has_left = false;
+                }
+                GlobalSymbolTable->table[ident] = info;
+                kstr += "global @" + info.name + " = alloc ";
+                if (info.type == "int")
+                    kstr += "i32";
+                kstr += ", zeroinit\n";
             }
-            CurrentSymbolTable->table[ident] = info;
-            if (info.type == "int") {
-                kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";
-                if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n";
-                else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n";
+            else {
+                SymbolInfo info;
+                info.type = str;
+                info.value = 0;
+                info.is_const = is_const;
+                info.level = level;
+                info.name = ident + "_" + std::to_string(level);
+                if (init_val) {
+                    has_left = true;
+                    init_val->Generate(true);
+                    has_left = false;
+                }
+                CurrentSymbolTable->table[ident] = info;
+                if (info.type == "int") {
+                    kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";
+                    if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n";
+                    else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n";
+                }
             }
             if (next)
                 next->AddtoSymbolTable(str, false);
@@ -816,6 +927,7 @@ class FuncFParamAST : public BaseAST {
             info.value = 0;
             info.is_const = is_const;
             info.level = 1;
+            info.name = ident + "_1";
             FuncSymbolTable->table[ident] = info;
         }
 };

@@ -8,16 +8,19 @@
 class SymbolInfo {
     public:
         std::string type;
+        std::string name;
         bool is_const;
         int value;
         int level;
 };
 
+class SymbolTableNode;
+
+extern std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;
+extern std::unordered_map<std::string, SymbolInfo> FuncTable;
+
 class SymbolTableNode {
     public:
         std::unordered_map<std::string, SymbolInfo> table;
-        std::shared_ptr<SymbolTableNode> parent;
+        std::shared_ptr<SymbolTableNode> parent = GlobalSymbolTable;
 };
-
-extern std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable;
-extern std::unordered_map<std::string, SymbolInfo> FuncTable;

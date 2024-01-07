@@ -36,13 +36,13 @@ using namespace std;
 %token <str_val> IDENT LT GT LE GE EQ NE AND OR
 
 // lv1
-%type <ast_val> FuncDef FuncType Block Stmt
+%type <ast_val> FuncType Block Stmt
 // lv3
 %type <ast_val> Exp UnaryExp PrimaryExp MulExp AddExp LOrExp LAndExp EqExp RelExp
 // lv4
-%type <ast_val> Decl ConstDecl ConstDef ConstInitVal BlockItem LVal BType ConstExp VarDecl VarDef InitVal
+%type <ast_val> Decl ConstDecl ConstDef ConstInitVal BlockItem LVal BType ConstExp VarDecl VarDef InitVal 
 // lv8
-%type <ast_val> FuncFParams FuncFParam FuncRParams
+%type <ast_val> FuncFParams FuncFParam FuncRParams RestCompUnit
 
 %type <int_val> Number
 %type <char_val> UnaryOp AddOp MulOp
@@ -52,41 +52,105 @@ using namespace std;
 
 // lv1
 CompUnit
-  : FuncDef {
+  : ConstDecl {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->type = 0;
+    comp_unit->const_decl = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
   }
-  | FuncDef CompUnit {
+  | ConstDecl CompUnit {
     auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    comp_unit->type = 0;
+    comp_unit->const_decl = unique_ptr<BaseAST>($1);
+    comp_unit->next = move(ast);
+    ast = move(comp_unit);
+  }
+  | FuncType IDENT RestCompUnit {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = 1;
+    comp_unit->func_type = unique_ptr<BaseAST>($1);
+    comp_unit->ident = *$2;
+    comp_unit->rest_comp_unit = unique_ptr<BaseAST>($3);
+    ast = move(comp_unit);
+  }
+  | FuncType IDENT RestCompUnit CompUnit {
+    auto comp_unit = make_unique<CompUnitAST>();
+    comp_unit->type = 1;
+    comp_unit->func_type = unique_ptr<BaseAST>($1);
+    comp_unit->ident = *$2;
+    comp_unit->rest_comp_unit = unique_ptr<BaseAST>($3);
     comp_unit->next = move(ast);
     ast = move(comp_unit);
   }
   ;
 
-FuncDef
-  : FuncType IDENT '(' ')' Block {
-    auto ast = new FuncDefAST();
-    ast->func_type = unique_ptr<BaseAST>($1);
-    ast->ident = *$2;
-    ast->block = unique_ptr<BaseAST>($5);
+RestCompUnit
+  : '(' ')' Block {
+    auto ast = new RestCompUnitAST();
+    ast->type = 0;
+    ast->block = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | FuncType IDENT '(' FuncFParams ')' Block {
-    auto ast = new FuncDefAST();
-    ast->func_type = unique_ptr<BaseAST>($1);
-    ast->ident = *$2;
-    ast->func_f_params = unique_ptr<BaseAST>($4);
-    ast->block = unique_ptr<BaseAST>($6);
+  | '(' FuncFParams ')' Block {
+    auto ast = new RestCompUnitAST();
+    ast->type = 0;
+    ast->func_f_params = unique_ptr<BaseAST>($2);
+    ast->block = unique_ptr<BaseAST>($4);
+    $$ = ast;
+  }
+  | ';' {
+    auto ast = new RestCompUnitAST();
+    ast->type = 1;
+    $$ = ast;
+  }
+  | ',' VarDef ';' {
+    auto ast = new RestCompUnitAST();
+    ast->type = 1;
+    ast->var_def = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | '=' InitVal ';' {
+    auto ast = new RestCompUnitAST();
+    ast->type = 1;
+    ast->init_val = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | '=' InitVal ',' VarDef ';' {
+    auto ast = new RestCompUnitAST();
+    ast->type = 1;
+    ast->var_def = unique_ptr<BaseAST>($2);
+    ast->init_val = unique_ptr<BaseAST>($4);
     $$ = ast;
   }
   ;
 
+// FuncDef
+//   : FuncType IDENT '(' ')' Block {
+//     auto ast = new FuncDefAST();
+//     ast->func_type = unique_ptr<BaseAST>($1);
+//     ast->ident = *$2;
+//     ast->block = unique_ptr<BaseAST>($5);
+//     $$ = ast;
+//   }
+//   | FuncType IDENT '(' FuncFParams ')' Block {
+//     auto ast = new FuncDefAST();
+//     ast->func_type = unique_ptr<BaseAST>($1);
+//     ast->ident = *$2;
+//     ast->func_f_params = unique_ptr<BaseAST>($4);
+//     ast->block = unique_ptr<BaseAST>($6);
+//     $$ = ast;
+//   }
+//   ;
+
 FuncType
-  : BType {
+  : INT {
     auto ast = new FuncTypeAST();
-    ast->b_type = unique_ptr<BaseAST>($1);
+    ast->label = "int";
+    $$ = ast;
+  }
+  | VOID {
+    auto ast = new FuncTypeAST();
+    ast->label = "void";
     $$ = ast;
   }
   ;
@@ -509,11 +573,6 @@ BType
   : INT {
     auto ast = new BTypeAST();
     ast->label = "int";
-    $$ = ast;
-  }
-  | VOID {
-    auto ast = new BTypeAST();
-    ast->label = "void";
     $$ = ast;
   }
   ;

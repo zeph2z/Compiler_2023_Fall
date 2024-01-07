@@ -16,15 +16,15 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
-bool must_return = false, branch = false, func_is_void = false, has_left = false;
+bool must_return = false, branch = false, func_is_void = false, has_left = false, global = false;
 int cnt = 0, level = 0, block_cnt = 0;
 std::string kstr, last_br, true_block_name, false_block_name;
-std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable;
+std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;
 std::unordered_map<std::string, SymbolInfo> FuncTable;
 std::stack<int> while_stack;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
-    os << "type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
+    os << "name: " << info.name << ", type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
     return os;
 }
 
@@ -64,10 +64,17 @@ int main(int argc, const char *argv[]) {
   auto retp = yyparse(ast);
   assert(!retp);
 
+  GlobalSymbolTable = make_shared<SymbolTableNode>();
   decl_lib_func();
 
   ast->Generate();
-  cout << endl;
+  for (const auto &kv : GlobalSymbolTable->table) {
+    auto &info = kv.second;
+    cout << info << endl;
+  }
+  for (const auto& pair : FuncTable) {
+    std::cout << pair.first << " " << pair.second.type << std::endl;
+  }
 
   FILE *yyout = fopen(output, "w");
   assert(yyout);
