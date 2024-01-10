@@ -9,10 +9,11 @@
 #include "symbol_table.hpp"
 
 extern bool must_return, branch, func_is_void, has_left, global, need_load, as_para;
-extern int cnt, level, block_cnt, logic_cnt, array_cnt, loc, depth;
-extern std::string kstr, last_br, true_block_name, false_block_name;
+extern int cnt, level, block_cnt, logic_cnt, array_cnt, loc, depth, func_r_cnt;
+extern std::string kstr, last_br, true_block_name, false_block_name, current_func;
 extern std::stack<int> while_stack, current_depth, array_depth;
 extern std::vector<int> array_temp, array_shape;
+extern std::vector<std::string> params;
 extern std::stack<std::string> current_ptr;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
@@ -76,15 +77,17 @@ class RestCompUnitAST : public BaseAST {
                 CurrentSymbolTable.reset();
                 level = 0;
                 last_br.clear();
+                params.clear();
                 kstr += "fun @" + pass_ident + "(";
                 if (func_f_params) func_f_params->Generate(write);
                 kstr += ")";
 
                 if (label == "void") func_is_void = true;
                 else func_is_void = false;
-                if (label == "int") kstr += ": i32";
+                if (label == "i32") kstr += ": i32";
 
                 FuncTable[pass_ident].type = label;
+                FuncTable[pass_ident].param = params;
                 for (const auto& pair : FuncSymbolTable->table) {
                     std::cout << pair.first << " "  << pair.second << std::endl;
                 }
@@ -156,7 +159,7 @@ class RestCompUnitAST : public BaseAST {
                     }
                     GlobalSymbolTable->table[pass_ident] = info;
                     kstr += "global @" + info.name + " = alloc ";
-                    if (info.type == "int")
+                    if (info.type == "i32")
                         kstr += "i32";
                     if (init_val) kstr += ", " + std::to_string(init_val->value) + "\n";
                     else kstr += ", zeroinit\n";
@@ -176,7 +179,7 @@ class RestCompUnitAST : public BaseAST {
 class FuncTypeAST : public BaseAST {
     public:
         void Generate(bool write = true) override {
-            if (label == "int") kstr += "i32 ";
+            if (label == "i32") kstr += "i32 ";
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -191,7 +194,7 @@ class BlockAST : public BaseAST {
             if (CurrentSymbolTable == nullptr) {
                 CurrentSymbolTable = std::make_shared<SymbolTableNode>();
                 for (auto& pair : FuncSymbolTable->table) {
-                    if (pair.second.type == "int") {
+                    if (pair.second.type == "i32") {
                         kstr += "    @" + pair.first + "_1" + " = alloc " + pair.second.type + "\n";
                         kstr += "    store @" + pair.first + ", @" + pair.first + "_1" + "\n";
                     }
@@ -427,11 +430,13 @@ class UnaryExpAST : public BaseAST {
             }
             else if (type == 2) {
                 as_para = true;
+                func_r_cnt = 0;
+                current_func = ident;
                 if (func_r_params) func_r_params->Generate(write);
                 as_para = false;
                 if (write) {
                     std::string func_type = FuncTable[ident].type;
-                    if (has_left || func_type == "int") {
+                    if (has_left || func_type == "i32") {
                         label = "%" + std::to_string(cnt++);
                         kstr += "    " + label + " = call @" + ident + "(";
                     }
@@ -967,13 +972,18 @@ class LValAST : public BaseAST {
                     it = it->parent;
                 }
                 current_ptr.push("@" + label);
-                array->Generate(true);
+                if (!need_load) {
+                    need_load = true;
+                    array->Generate(true);
+                    need_load = false;
+                }
+                else array->Generate(true);
                 current_ptr.pop();
                 label = "%" + std::to_string(cnt++);
                 rabel = array->label;
                 if (need_load) {
-                    if (!as_para) kstr += "    " + label + " = load " + array->label + "\n";
-                    else kstr += "    " + label + " = getelemptr " + array->label + ", 0\n";
+                    if (as_para && FuncTable[current_func].param[func_r_cnt][0] == '*') kstr += "    " + label + " = getelemptr " + array->label + ", 0\n";
+                    else kstr += "    " + label + " = load " + array->label + "\n";
                 }
             }
             else {
@@ -981,10 +991,10 @@ class LValAST : public BaseAST {
                 while (it) {
                     auto it2 = it->table.find(label);
                     if (it2 != it->table.end()) {
-                        if (it2->second.type != "int") {
+                        if (it2->second.type != "i32") {
                             if (write) {
                                 if (it2->second.is_const) kstr += "    %" + std::to_string(cnt++) + " = getptr @" + it2->second.name + "\n";
-                                else kstr += "    %" + std::to_string(cnt++) + " = getelemptr @" + it2->second.name + "\n";
+                                else kstr += "    %" + std::to_string(cnt++) + " = getelemptr @" + it2->second.name + ", 0\n";
                             }
                             label = "%" + std::to_string(cnt - 1);
                             rabel = "@" + it2->second.name;
@@ -1092,7 +1102,7 @@ class VarDefAST : public BaseAST {
                     }
                     GlobalSymbolTable->table[ident] = info;
                     kstr += "global @" + info.name + " = alloc ";
-                    if (info.type == "int")
+                    if (info.type == "i32")
                         kstr += "i32";
                     kstr += ", zeroinit\n";
                 }
@@ -1128,12 +1138,12 @@ class VarDefAST : public BaseAST {
                     
                     if (init_val) {
                         init_val->Generate(true);
+                        loc = 0;
+                        current_ptr.push("@" + info.name);
+                        array_generate_loc(0);
+                        current_ptr.pop();
                     }
 
-                    loc = 0;
-                    current_ptr.push("@" + info.name);
-                    array_generate_loc(0);
-                    current_ptr.pop();
                 }
                 else {
                     SymbolInfo info;
@@ -1148,7 +1158,7 @@ class VarDefAST : public BaseAST {
                         has_left = false;
                     }
                     CurrentSymbolTable->table[ident] = info;
-                    if (info.type == "int") {
+                    if (info.type == "i32") {
                         kstr += "    @" + ident + "_" + std::to_string(level) + " = alloc i32\n";
                         if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n";
                         else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n";
@@ -1235,9 +1245,10 @@ class FuncFParamAST : public BaseAST {
 
         void Generate(bool write = true) override {
             if (type == 0) {
-                if (b_type->label == "int")
+                if (b_type->label == "i32")
                     kstr += "@" + ident + ": i32";
                 label = b_type->label;
+                params.push_back(b_type->label);
             }
             else {
                 kstr += "@" + ident + ": ";
@@ -1247,6 +1258,7 @@ class FuncFParamAST : public BaseAST {
                     label += const_array->label;
                 }
                 else label += "i32";
+                params.push_back(label);
                 kstr += label;
             }
             this->AddtoSymbolTable(label, false);
@@ -1271,6 +1283,7 @@ class FuncRParamsAST : public BaseAST {
             exp->Generate(write);
             label = exp->label;
             if (next) {
+                func_r_cnt++;
                 next->Generate(write);
                 label += ", " + next->label;
             }

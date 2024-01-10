@@ -3,12 +3,14 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 class SymbolInfo {
     public:
         std::string type;
         std::string name;
+        std::vector<std::string> param;
         bool is_const;
         int value;
         int level;

@@ -18,16 +18,21 @@ extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
 bool must_return = false, branch = false, func_is_void = false, has_left = false, global = false, need_load = true, as_para = false;
-int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt, loc, depth;
-std::string kstr, last_br, true_block_name, false_block_name;
+int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt, loc, depth, func_r_cnt;
+std::string kstr, last_br, true_block_name, false_block_name, current_func;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;
 std::unordered_map<std::string, SymbolInfo> FuncTable;
 std::stack<int> while_stack, current_depth, array_depth;
 std::vector<int> array_temp, array_shape;
+std::vector<std::string> params;
 std::stack<std::string> current_ptr;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
     os << "name: " << info.name << ", type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
+    os << ", param: ";
+    for (const auto& param : info.param) {
+        os << param << " ";
+    }
     return os;
 }
 
@@ -109,7 +114,11 @@ int main(int argc, const char *argv[]) {
     cout << info << endl;
   }
   for (const auto& pair : FuncTable) {
-    std::cout << pair.first << " " << pair.second.type << std::endl;
+    std::cout << pair.first << " ";
+    for (const auto& param : pair.second.param) {
+      std::cout << param << " ";
+    }
+    std::cout << std::endl;
   }
 
   FILE *yyout = fopen(output, "w");

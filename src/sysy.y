@@ -158,7 +158,7 @@ RestCompUnit
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
-    ast->label = "int";
+    ast->label = "i32";
     $$ = ast;
   }
   | VOID {
@@ -730,7 +730,7 @@ Array
 BType
   : INT {
     auto ast = new BTypeAST();
-    ast->label = "int";
+    ast->label = "i32";
     $$ = ast;
   }
   ;
