@@ -196,11 +196,11 @@ class BlockAST : public BaseAST {
                 for (auto& pair : FuncSymbolTable->table) {
                     if (pair.second.type == "i32") {
                         kstr += "    @" + pair.first + "_1" + " = alloc " + pair.second.type + "\n";
-                        kstr += "    store @" + pair.first + ", @" + pair.first + "_1" + "\n";
+                        kstr += "    store @" + pair.first + "_p, @" + pair.first + "_1" + "\n";
                     }
                     else {
                         kstr += "    %" + pair.first + " = alloc " + pair.second.type + "\n";
-                        kstr += "    store @" + pair.first + ", %" + pair.first + "\n";
+                        kstr += "    store @" + pair.first + "_p, %" + pair.first + "\n";
                         kstr += "    @" + pair.first + "_1" + " = load %" + pair.first + "\n";
                         pair.second.is_const = true;
                     }
@@ -993,7 +993,7 @@ class LValAST : public BaseAST {
                     if (it2 != it->table.end()) {
                         if (it2->second.type != "i32") {
                             if (write) {
-                                if (it2->second.is_const) kstr += "    %" + std::to_string(cnt++) + " = getptr @" + it2->second.name + "\n";
+                                if (it2->second.is_const) kstr += "    %" + std::to_string(cnt++) + " = getptr @" + it2->second.name + ", 0\n";
                                 else kstr += "    %" + std::to_string(cnt++) + " = getelemptr @" + it2->second.name + ", 0\n";
                             }
                             label = "%" + std::to_string(cnt - 1);
@@ -1246,12 +1246,12 @@ class FuncFParamAST : public BaseAST {
         void Generate(bool write = true) override {
             if (type == 0) {
                 if (b_type->label == "i32")
-                    kstr += "@" + ident + ": i32";
+                    kstr += "@" + ident + "_p: i32";
                 label = b_type->label;
                 params.push_back(b_type->label);
             }
             else {
-                kstr += "@" + ident + ": ";
+                kstr += "@" + ident + "_p: ";
                 label = "*";
                 if (const_array) {
                     const_array->Generate(false);

@@ -29,10 +29,6 @@ std::stack<std::string> current_ptr;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
     os << "name: " << info.name << ", type: " << info.type << ", value: " << info.value << ", is_const: " << info.is_const << ", level: " << info.level;
-    os << ", param: ";
-    for (const auto& param : info.param) {
-        os << param << " ";
-    }
     return os;
 }
 
@@ -94,7 +90,7 @@ int main(int argc, const char *argv[]) {
   auto mode = argv[1];
   auto input = argv[2];
   auto output = argv[4];
-  
+
   yyin = fopen(input, "r");
   assert(yyin);
 
