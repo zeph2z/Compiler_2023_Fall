@@ -982,7 +982,11 @@ class LValAST : public BaseAST {
                 label = "%" + std::to_string(cnt++);
                 rabel = array->label;
                 if (need_load) {
-                    if (as_para && FuncTable[current_func].param[func_r_cnt][0] == '*') kstr += "    " + label + " = getelemptr " + array->label + ", 0\n";
+                    bool tmp_bool = false;
+                    auto it = FuncTable.find(current_func);
+                    if (it == FuncTable.end()) tmp_bool = false;
+                    else tmp_bool = it->second.param[func_r_cnt][0] == '*';
+                    if (as_para && tmp_bool) kstr += "    " + label + " = getelemptr " + array->label + ", 0\n";
                     else kstr += "    " + label + " = load " + array->label + "\n";
                 }
             }

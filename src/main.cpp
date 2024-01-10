@@ -42,10 +42,10 @@ bool last_is_br() {
 void decl_lib_func() {
   kstr += "decl @getint(): i32\n";
   kstr += "decl @getch(): i32\n";
-  kstr += "decl @getarray(*i32): i32\n";
-  kstr += "decl @putint(i32)\n";
-  kstr += "decl @putch(i32)\n";
-  kstr += "decl @putarray(i32, *i32)\n";
+  kstr += "decl @getarray(*i32): i32\n"; FuncTable["getarray"].param.push_back("*i32");
+  kstr += "decl @putint(i32)\n"; FuncTable["putint"].param.push_back("i32");
+  kstr += "decl @putch(i32)\n"; FuncTable["putch"].param.push_back("i32");
+  kstr += "decl @putarray(i32, *i32)\n"; FuncTable["putarray"].param.push_back("i32"); FuncTable["putarray"].param.push_back("*i32");
   kstr += "decl @starttime()\n";
   kstr += "decl @stoptime()\n";
   kstr += "\n";
