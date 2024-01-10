@@ -6,6 +6,7 @@
 #include <cstring>
 #include <stack>
 #include <unordered_map>
+#include <vector>
 #include "ast.hpp"
 #include "koopa.h"
 #include "raw.hpp"
@@ -16,12 +17,13 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
-bool must_return = false, branch = false, func_is_void = false, has_left = false, global = false;
-int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt;
+bool must_return = false, branch = false, func_is_void = false, has_left = false, global = false, need_load = true;
+int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt, loc, depth;
 std::string kstr, last_br, true_block_name, false_block_name;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;
 std::unordered_map<std::string, SymbolInfo> FuncTable;
-std::stack<int> while_stack, array_depth;
+std::stack<int> while_stack, current_depth, array_depth;
+std::vector<int> array_temp, array_shape;
 std::stack<std::string> current_ptr;
 
 std::ostream& operator<<(std::ostream& os, const SymbolInfo& info) {
@@ -46,6 +48,39 @@ void decl_lib_func() {
   kstr += "decl @starttime()\n";
   kstr += "decl @stoptime()\n";
   kstr += "\n";
+}
+
+void array_generate_loc(int _depth) {
+  if (_depth == array_shape.size()) {
+    kstr += "    store " + to_string(array_temp[loc++]) + ", " + current_ptr.top() + "\n";
+    return;
+  }
+  for (int i = 0; i < array_shape[_depth]; i++) {
+    string temp = "@ptr_" + to_string(array_cnt++);
+    kstr += "    " + temp + " = getelemptr " + current_ptr.top() + ", " + std::to_string(i) + "\n";
+    current_ptr.push(temp);
+    array_generate_loc(_depth + 1);
+    current_ptr.pop();
+  }
+}
+
+void array_generate_glb(int _depth) {
+  if (_depth == array_shape.size() - 1) {
+    kstr += to_string(array_temp[loc++]);
+    for (int i = 1; i < array_shape[_depth]; i++)
+      kstr += ", " + to_string(array_temp[loc++]);
+    return;
+  }
+  else {
+    kstr += "{";
+    array_generate_glb(_depth + 1);
+    kstr += "}";
+    for (int i = 1; i < array_shape[_depth]; i++) {
+      kstr += ", {";
+      array_generate_glb(_depth + 1);
+      kstr += "}";
+    }
+  }
 }
 
 int main(int argc, const char *argv[]) {

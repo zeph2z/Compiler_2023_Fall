@@ -478,6 +478,11 @@ ConstInitVal
     ast->const_init_vals = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
+  | '{' '}' {
+    auto ast = new ConstInitValAST();
+    ast->type = 1;
+    $$ = ast;
+  }
   ;
 
 ConstInitVals
@@ -616,6 +621,11 @@ InitVal
     auto ast = new InitValAST();
     ast->type = 1;
     ast->init_vals = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  } 
+  | '{' '}' {
+    auto ast = new InitValAST();
+    ast->type = 1;
     $$ = ast;
   }
   ;

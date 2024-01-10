@@ -4,20 +4,24 @@
 #include <memory>
 #include <stack>
 #include <string>
+#include <vector>
+#include <algorithm>
 #include "symbol_table.hpp"
 
-extern bool must_return, branch, func_is_void, has_left, global;
-extern int cnt, level, block_cnt, logic_cnt, array_cnt;
+extern bool must_return, branch, func_is_void, has_left, global, need_load;
+extern int cnt, level, block_cnt, logic_cnt, array_cnt, loc, depth;
 extern std::string kstr, last_br, true_block_name, false_block_name;
-extern std::stack<int> while_stack, array_depth;
+extern std::stack<int> while_stack, current_depth, array_depth;
+extern std::vector<int> array_temp, array_shape;
 extern std::stack<std::string> current_ptr;
 
 extern std::ostream& operator<<(std::ostream& os, const SymbolInfo& info);
 extern bool last_is_br();
+extern void array_generate_loc(int _depth), array_generate_glb(int _depth);
 
 class BaseAST {
     public:
-        std::string label, pass_ident;
+        std::string label, rabel, pass_ident;
         int value;
         std::unique_ptr<BaseAST> next = nullptr;
 
@@ -103,16 +107,29 @@ class RestCompUnitAST : public BaseAST {
                     kstr += "global @" + info.name + " = alloc ";
                     const_array->Generate(true);
                     kstr += ", ";
-                    
-                    if (init_val) {
-                        array_cnt = 0;
-                        current_ptr.push(info.name);
-                        global = true;
-                        init_val->Generate(false);
-                        global = false;
-                        current_ptr.pop();
+
+                    array_temp.clear();
+                    array_shape.clear();
+                    int size = 1;
+                    loc = 0, depth = -1;
+
+                    while (!array_depth.empty()) {
+                        size *= array_depth.top();
+                        array_shape.push_back(array_depth.top());
+                        array_depth.pop();
                     }
-                    else kstr += "zeroinit\n";
+                    array_temp = std::vector<int>(size, 0);
+                    std::reverse(array_shape.begin(), array_shape.end());
+
+                    if (init_val) {
+                        kstr += "{";
+                        init_val->Generate(false);
+                        loc = 0;
+                        array_generate_glb(0);
+                        kstr += "}";
+                    }
+                    else kstr += "zeroinit";
+                    kstr += "\n";
 
                     global = true;
                     if (var_def) var_def->AddtoSymbolTable(label, false);
@@ -272,7 +289,10 @@ class StmtAST : public BaseAST {
                 while (it) {
                     auto it2 = it->table.find(l_val->label);
                     if (it2 != it->table.end()) {
-                        kstr += "    store " + exp->label + ", @" + it2->second.name + "\n";
+                        need_load = false;
+                        l_val->Generate(true);
+                        need_load = true;
+                        kstr += "    store " + exp->label + ", " + l_val->rabel + "\n";
                         break;
                     }
                     it = it->parent;
@@ -785,24 +805,98 @@ class ConstDefAST : public BaseAST {
         void Generate(bool write = true) override {}
         void AddtoSymbolTable(std::string str, bool is_const) override {
             if (global) {
-                SymbolInfo info;
-                info.type = str;
-                const_init_val->Generate(false);
-                info.value = const_init_val->value;
-                info.is_const = is_const;
-                info.level = 0;
-                info.name = ident;
-                GlobalSymbolTable->table[ident] = info;
+                if (const_array) {
+                    SymbolInfo info;
+                    info.type = str;
+                    info.value = 0;
+                    info.is_const = is_const;
+                    info.level = 0;
+                    info.name = ident;
+
+                    GlobalSymbolTable->table[ident] = info;
+                    kstr += "global @" + info.name + " = alloc ";
+                    const_array->Generate(true);
+                    kstr += ", ";
+
+                    array_temp.clear();
+                    array_shape.clear();
+                    int size = 1;
+                    loc = 0, depth = -1;
+
+                    while (!array_depth.empty()) {
+                        size *= array_depth.top();
+                        array_shape.push_back(array_depth.top());
+                        array_depth.pop();
+                    }
+                    array_temp = std::vector<int>(size, 0);
+                    std::reverse(array_shape.begin(), array_shape.end());
+
+                    if (const_init_val) {
+                        kstr += "{";
+                        const_init_val->Generate(false);
+                        loc = 0;
+                        array_generate_glb(0);
+                        kstr += "}";
+                    }
+                    else kstr += "zeroinit";
+                    kstr += "\n\n";
+                }
+                else {
+                    SymbolInfo info;
+                    info.type = str;
+                    const_init_val->Generate(false);
+                    info.value = const_init_val->value;
+                    info.is_const = is_const;
+                    info.level = 0;
+                    info.name = ident;
+                    GlobalSymbolTable->table[ident] = info;
+                }
             }
             else {
-                SymbolInfo info;
-                info.type = str;
-                const_init_val->Generate(false);
-                info.value = const_init_val->value;
-                info.is_const = is_const;
-                info.level = level;
-                info.name = ident + "_" + std::to_string(level);
-                CurrentSymbolTable->table[ident] = info;
+                if (const_array) {
+                    SymbolInfo info;
+                    info.type = str;
+                    info.value = 0;
+                    info.is_const = is_const;
+                    info.level = level;
+                    info.name = ident + "_" + std::to_string(level);
+
+                    CurrentSymbolTable->table[ident] = info;
+                    kstr += "    @" + info.name + " = alloc ";
+                    const_array->Generate(true);
+                    kstr += "\n";
+
+                    array_temp.clear();
+                    array_shape.clear();
+                    int size = 1;
+                    loc = 0, depth = -1;
+
+                    while (!array_depth.empty()) {
+                        size *= array_depth.top();
+                        array_shape.push_back(array_depth.top());
+                        array_depth.pop();
+                    }
+                    array_temp = std::vector<int>(size, 0);
+                    std::reverse(array_shape.begin(), array_shape.end());
+                    
+                    if (const_init_val) {
+                        const_init_val->Generate(true);
+                    }
+
+                    loc = 0;
+                    current_ptr.push("@" + info.name);
+                    array_generate_loc(0);
+                    current_ptr.pop();                }
+                else {
+                    SymbolInfo info;
+                    info.type = str;
+                    const_init_val->Generate(false);
+                    info.value = const_init_val->value;
+                    info.is_const = is_const;
+                    info.level = level;
+                    info.name = ident + "_" + std::to_string(level);
+                    CurrentSymbolTable->table[ident] = info;
+                }
             }
             if (next)
                 next->AddtoSymbolTable(str, true);
@@ -817,9 +911,19 @@ class ConstInitValAST : public BaseAST {
         std::unique_ptr<BaseAST> const_init_vals;
 
         void Generate(bool write = true) override {
-            const_exp->Generate(write);
-            if (write) label = const_exp->label;
-            value = const_exp->value;
+            if (type == 0) {
+                const_exp->Generate(write);
+                if (write) label = const_exp->label;
+                value = const_exp->value;
+            }
+            else {                
+                value = 810975;
+                depth++;
+                if (const_init_vals) {
+                    const_init_vals->Generate(write);
+                }
+                depth--;
+            }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
@@ -831,9 +935,16 @@ class ConstInitValsAST : public BaseAST {
 
         void Generate(bool write = true) override {
             const_init_val->Generate(write);
+            if (const_init_val->value != 810975) array_temp[loc++] = const_init_val->value;
             if (next) {
-                kstr += ", ";
                 next->Generate(write);
+            }
+            else {
+                int _align = 1;
+                for (int i = depth; i < array_shape.size(); i++)
+                    _align *= array_shape[i];
+                while (loc % _align != 0)
+                    loc++;
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -868,10 +979,12 @@ class LValAST : public BaseAST {
                     }
                     it = it->parent;
                 }
-                current_ptr.push(label);
+                current_ptr.push("@" + label);
                 array->Generate(true);
                 current_ptr.pop();
-                label = array->label;
+                label = "%" + std::to_string(cnt++);
+                rabel = array->label;
+                if (need_load) kstr += "    " + label + " = load " + array->label + "\n";
             }
             else {
                 auto it = CurrentSymbolTable;
@@ -884,8 +997,9 @@ class LValAST : public BaseAST {
                         }
                         else {
                             if (write) {
-                                kstr += "    %" + std::to_string(cnt++) + " = load @" + it2->second.name + "\n"; 
+                                if (need_load) kstr += "    %" + std::to_string(cnt++) + " = load @" + it2->second.name + "\n"; 
                                 label = "%" + std::to_string(cnt - 1);
+                                rabel = "@" + it2->second.name;
                             }
                             value = it2->second.value;
                         }
@@ -918,7 +1032,7 @@ class VarDeclAST : public BaseAST {
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
 
-// VarDef ::= IDENT "[" ConstArray "]" | IDENT "=" InitVal | IDENT ',' VarDef | IDENT "=" InitVal "," VarDef;
+// VarDef ::= IDENT ConstArray | IDENT "=" InitVal | IDENT ',' VarDef | IDENT "=" InitVal "," VarDef;
 class VarDefAST : public BaseAST {
     public:
         std::string ident;
@@ -941,13 +1055,28 @@ class VarDefAST : public BaseAST {
                     const_array->Generate(true);
                     kstr += ", ";
 
-                    if (init_val) {
-                        array_cnt = 0;
-                        current_ptr.push(info.name);
-                        init_val->Generate(false);
-                        current_ptr.pop();
+                    array_temp.clear();
+                    array_shape.clear();
+                    int size = 1;
+                    loc = 0, depth = -1;
+
+                    while (!array_depth.empty()) {
+                        size *= array_depth.top();
+                        array_shape.push_back(array_depth.top());
+                        array_depth.pop();
                     }
-                    else kstr += "zeroinit\n";
+                    array_temp = std::vector<int>(size, 0);
+                    std::reverse(array_shape.begin(), array_shape.end());
+
+                    if (init_val) {
+                        kstr += "{";
+                        init_val->Generate(false);
+                        loc = 0;
+                        array_generate_glb(0);
+                        kstr += "}";
+                    }
+                    else kstr += "zeroinit";
+                    kstr += "\n";
                 }
                 else {
                     SymbolInfo info;
@@ -982,12 +1111,27 @@ class VarDefAST : public BaseAST {
                     const_array->Generate(true);
                     kstr += "\n";
 
-                    if (init_val) {
-                        array_cnt = 0;
-                        current_ptr.push(info.name);
-                        init_val->Generate(true);
-                        current_ptr.pop();
+                    array_temp.clear();
+                    array_shape.clear();
+                    int size = 1;
+                    loc = 0, depth = -1;
+
+                    while (!array_depth.empty()) {
+                        size *= array_depth.top();
+                        array_shape.push_back(array_depth.top());
+                        array_depth.pop();
                     }
+                    array_temp = std::vector<int>(size, 0);
+                    std::reverse(array_shape.begin(), array_shape.end());
+                    
+                    if (init_val) {
+                        init_val->Generate(true);
+                    }
+
+                    loc = 0;
+                    current_ptr.push("@" + info.name);
+                    array_generate_loc(0);
+                    current_ptr.pop();
                 }
                 else {
                     SymbolInfo info;
@@ -1007,6 +1151,9 @@ class VarDefAST : public BaseAST {
                         if (init_val) kstr += "    store " + init_val->label + ", @" + ident + "_" + std::to_string(level) + "\n";
                         else kstr += "    store 0, @" + ident + "_" + std::to_string(level) + "\n";
                     }
+                    while (!array_depth.empty()) {
+                        array_depth.pop();      
+                    }             
                 }
             }
             if (next)
@@ -1028,18 +1175,12 @@ class InitValAST : public BaseAST {
                 value = exp->value;
             }
             else {
-                if (global) {
-                    if (init_vals) {
-                        kstr += "{";
-                        init_vals->Generate(write);
-                        kstr += "}";
-                    }
-                } 
-                else {
-                    if (init_vals) {
-                        init_vals->Generate(write);
-                    }
+                value = 810975;
+                depth++;
+                if (init_vals) {
+                    init_vals->Generate(write);
                 }
+                depth--;
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -1051,41 +1192,17 @@ class InitValsAST : public BaseAST {
         std::unique_ptr<BaseAST> init_val;
 
         void Generate(bool write = true) override {
-            if (global) {
-                init_val->Generate(write);
-                kstr += std::to_string(init_val->value);
-                array_cnt++;
-                if (next) {
-                    kstr += ", ";
-                    next->Generate(write);
-                }
-                else {
-                    while (array_cnt != array_depth.top()) {
-                        kstr += ", 0";
-                        array_cnt++;
-                    }
-                }
+            init_val->Generate(write);
+            if (init_val->value != 810975) array_temp[loc++] = init_val->value;
+            if (next) {
+                next->Generate(write);
             }
             else {
-                init_val->Generate(write);
-                if (write) {
-                    label = "%ptr_" + std::to_string(cnt++);
-                    kstr += "    " + label + " = getelementptr @" + current_ptr.top() + ", " + std::to_string(array_cnt) + "\n";
-                    kstr += "    store " + init_val->label + ", " + label + "\n";
-                }
-                array_cnt++;
-                if (next) next->Generate(write);
-                else {
-                    while (array_cnt != array_depth.top()) {
-                        if (write) {
-                            label = "%ptr_" + std::to_string(cnt++);
-                            kstr += "    " + label + " = getelementptr @" + current_ptr.top() + ", " + std::to_string(array_cnt) + "\n";
-                            kstr += "    store 0, " + label + "\n";
-                        }
-                        array_cnt++;
-                    }
-                }
-                array_depth.pop();
+                int _align = 1;
+                for (int i = depth; i < array_shape.size(); i++)
+                    _align *= array_shape[i];
+                while (loc % _align != 0)
+                    loc++;
             }
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
@@ -1155,7 +1272,7 @@ class ConstArrayAST : public BaseAST {
             if (write) kstr += "[";
             value = const_exp->value;
             if (next) {
-                next->Generate(false);
+                next->Generate(write);
             }
             else if (write) kstr += "i32";
             if (write) {
@@ -1174,9 +1291,14 @@ class ArrayAST : public BaseAST {
             exp->Generate(write);
             if (write) {
                 label = "%" + std::to_string(cnt++);
-                kstr += "    " + label + " = getelementptr @" + current_ptr.top() + ", " + exp->label + "\n";
+                kstr += "    " + label + " = getelemptr " + current_ptr.top() + ", " + exp->label + "\n";
             }
-
+            if (next) {
+                current_ptr.push(label);
+                next->Generate(write);
+                current_ptr.pop();
+            }
+            label = "%" + std::to_string(cnt - 1);
         }
         void AddtoSymbolTable(std::string str, bool is_const) override {}
 };
