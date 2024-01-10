@@ -559,7 +559,8 @@ class MulExpAST : public BaseAST {
                             // %1 = mod %0, %2
                             kstr += "    " + label + " = mod " + mul_exp->label + ", " + unary_exp->label + "\n";
                         }
-                        value = mul_exp->value % unary_exp->value;
+                        if (unary_exp->value == 0) value = 0;
+                        else value = mul_exp->value % unary_exp->value;
                         break;
                     }
                 }
