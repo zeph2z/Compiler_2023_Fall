@@ -662,8 +662,24 @@ FuncFParams
 FuncFParam
   : BType IDENT {
     auto ast = new FuncFParamAST();
+    ast->type = 0;
     ast->b_type = unique_ptr<BaseAST>($1);
     ast->ident = *$2;
+    $$ = ast;
+  }
+  | BType IDENT '[' ']' {
+    auto ast = new FuncFParamAST();
+    ast->type = 1;
+    ast->b_type = unique_ptr<BaseAST>($1);
+    ast->ident = *$2;
+    $$ = ast;
+  }
+  | BType IDENT '[' ']' ConstArray {
+    auto ast = new FuncFParamAST();
+    ast->type = 1;
+    ast->b_type = unique_ptr<BaseAST>($1);
+    ast->ident = *$2;
+    ast->const_array = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
   ;

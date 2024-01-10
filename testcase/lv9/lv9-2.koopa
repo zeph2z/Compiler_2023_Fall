@@ -7,35 +7,13 @@ decl @putarray(i32, *i32)
 decl @starttime()
 decl @stoptime()
 
-global @garr = alloc [i32, 10], {6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-
-fun @main(): i32 {
+fun @f1d(@arr: *i32) {
 %entry:
-    @arr_1 = alloc [i32, 10]
-    @ptr_0 = getelemptr @arr_1, 0
-    store 1, @ptr_0
-    @ptr_1 = getelemptr @arr_1, 1
-    store 2, @ptr_1
-    @ptr_2 = getelemptr @arr_1, 2
-    store 3, @ptr_2
-    @ptr_3 = getelemptr @arr_1, 3
-    store 4, @ptr_3
-    @ptr_4 = getelemptr @arr_1, 4
-    store 5, @ptr_4
-    @ptr_5 = getelemptr @arr_1, 5
-    store 0, @ptr_5
-    @ptr_6 = getelemptr @arr_1, 6
-    store 0, @ptr_6
-    @ptr_7 = getelemptr @arr_1, 7
-    store 0, @ptr_7
-    @ptr_8 = getelemptr @arr_1, 8
-    store 0, @ptr_8
-    @ptr_9 = getelemptr @arr_1, 9
-    store 0, @ptr_9
+    %arr = alloc *i32
+    store @arr, %arr
+    @arr_1 = load %arr
     @i_1 = alloc i32
     store 0, @i_1
-    @sum_1 = alloc i32
-    store 0, @sum_1
     jump %while_entry_0
 
 %while_entry_0:
@@ -44,24 +22,54 @@ fun @main(): i32 {
     br %1, %while_body_0, %end_0
 
 %while_body_0:
-    %2 = load @sum_1
-    %3 = load @i_1
-    %4 = getelemptr @arr_1, %3
-    %5 = load %4
-    %6 = add %2, %5
-    %7 = load @i_1
-    %8 = getelemptr @garr, %7
-    %9 = load %8
-    %10 = add %6, %9
-    store %10, @sum_1
-    %11 = load @i_1
-    %12 = add %11, 1
-    store %12, @i_1
+    %2 = load @i_1
+    %3 = getptr @arr_1, %2
+    store %2, %3
+    %5 = load @i_1
+    %6 = add %5, 1
+    store %6, @i_1
     jump %while_entry_0
 
 %end_0:
-    %13 = load @sum_1
-    ret %13
+    ret
+}
+
+
+fun @f2d(@arr: *[i32, 10]) {
+%entry:
+    %arr = alloc *[i32, 10]
+    store @arr, %arr
+    @arr_1 = load %arr
+    %7 = getptr @arr_1, 1
+    %8 = getelemptr %7, 2
+    store 3, %8
+    @i_1 = alloc i32
+    store 0, @i_1
+    jump %while_entry_1
+
+%while_entry_1:
+    %10 = load @i_1
+    %11 = lt %10, 10
+    br %11, %while_body_1, %end_1
+
+%while_body_1:
+    %12 = load @i_1
+    %13 = getptr @arr_1, %12
+    %14 = getelemptr %13, 0
+    call @f1d(%14)
+    %15 = load @i_1
+    %16 = add %15, 1
+    store %16, @i_1
+    jump %while_entry_1
+
+%end_1:
+    ret
+}
+
+
+fun @main(): i32 {
+%entry:
+    ret 33
 }
 
 
