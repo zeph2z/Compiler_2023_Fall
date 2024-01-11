@@ -121,8 +121,8 @@ RestCompUnit
   | '=' InitVal ',' VarDef ';' {
     auto ast = new RestCompUnitAST();
     ast->type = 1;
-    ast->var_def = unique_ptr<BaseAST>($2);
-    ast->init_val = unique_ptr<BaseAST>($4);
+    ast->init_val = unique_ptr<BaseAST>($2);
+    ast->var_def = unique_ptr<BaseAST>($4);
     $$ = ast;
   }
   | ConstArray ';' {

@@ -89,9 +89,6 @@ class RestCompUnitAST : public BaseAST {
 
                 FuncTable[pass_ident].type = label;
                 FuncTable[pass_ident].param = params;
-                for (const auto& pair : FuncSymbolTable->table) {
-                    std::cout << pair.first << " "  << pair.second << std::endl;
-                }
 
                 kstr += " {\n%entry:\n";
                 block->Generate(write);
@@ -170,6 +167,12 @@ class RestCompUnitAST : public BaseAST {
                     global = false;
                     CurrentSymbolTable = nullptr;
                     kstr += "\n";
+                }
+                if (var_def) {
+                    std::cout << 1;
+                    global = true;
+                    var_def->Generate(write);
+                    global = false;
                 }
             }
         }
@@ -434,6 +437,7 @@ class UnaryExpAST : public BaseAST {
                 func_r_cnt = 0;
                 current_func = ident;
                 if (func_r_params) func_r_params->Generate(write);
+                current_func.clear();
                 as_para = false;
                 if (write) {
                     std::string func_type = FuncTable[ident].type;
@@ -988,6 +992,7 @@ class LValAST : public BaseAST {
                     auto it = FuncTable.find(current_func);
                     if (it == FuncTable.end()) tmp_bool = false;
                     else tmp_bool = it->second.param[func_r_cnt][0] == '*';
+
                     if (as_para && tmp_bool) kstr += "    " + label + " = getelemptr " + array->label + ", 0\n";
                     else kstr += "    " + label + " = load " + array->label + "\n";
                 }
@@ -1107,10 +1112,9 @@ class VarDefAST : public BaseAST {
                         has_left = false;
                     }
                     GlobalSymbolTable->table[ident] = info;
-                    kstr += "global @" + info.name + " = alloc ";
-                    if (info.type == "i32")
-                        kstr += "i32";
-                    kstr += ", zeroinit\n";
+                    kstr += "global @" + info.name + " = alloc i32, ";
+                    if (init_val) kstr += init_val->label + "\n";
+                    else kstr += "zeroinit\n";
                 }
             }
             else {
