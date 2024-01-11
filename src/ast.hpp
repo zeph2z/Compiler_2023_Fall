@@ -310,17 +310,20 @@ class StmtAST : public BaseAST {
                     kstr += "%then_" + std::to_string(_block_cnt) + ":\n";
                     last_br.clear();
                     stmt->Generate(true);
-                    bool first_is_ret = last_br == "ret";
+                    bool first_is_ret = last_is_br();
                     if (!last_is_br()) kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n"; 
                     
                     kstr += "\n%else_" + std::to_string(_block_cnt) + ":\n";
                     last_br.clear();
                     else_stmt->Generate(true);
-                    bool second_is_ret = last_br == "ret";
+                    bool second_is_ret = last_is_br();
                     if (!last_is_br()) kstr += "    jump %end_" + std::to_string(_block_cnt) + "\n";
                     
                     must_return = first_is_ret && second_is_ret;
-                    if (!must_return) kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
+                    if (!must_return) {
+                        kstr += "\n%end_" + std::to_string(_block_cnt) + ":\n";
+                        last_br.clear();
+                    }
                 }
                 else {
                     true_block_name = "%then_" + std::to_string(_block_cnt);
