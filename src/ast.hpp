@@ -8,7 +8,7 @@
 #include <algorithm>
 #include "symbol_table.hpp"
 
-extern bool must_return, branch, func_is_void, has_left, global, need_load, as_para;
+extern bool must_return, branch, has_left, global, need_load, as_para;
 extern int cnt, level, block_cnt, logic_cnt, array_cnt, loc, depth, func_r_cnt;
 extern std::string kstr, last_br, true_block_name, false_block_name, current_func;
 extern std::stack<int> while_stack, current_depth, array_depth;
@@ -83,8 +83,6 @@ class RestCompUnitAST : public BaseAST {
                 kstr += ")";
                 CurrentSymbolTable.reset();
 
-                if (label == "void") func_is_void = true;
-                else func_is_void = false;
                 if (label == "i32") kstr += ": i32";
 
                 FuncTable[pass_ident].type = label;
@@ -92,7 +90,10 @@ class RestCompUnitAST : public BaseAST {
 
                 kstr += " {\n%entry:\n";
                 block->Generate(write);
-                if (func_is_void && !last_is_br()) kstr += "    ret\n"; 
+                if (!last_is_br()) {
+                    if (label == "void") kstr += "    ret\n";
+                    else if (label == "i32") kstr += "    ret 0\n";
+                }
                 kstr += "}\n\n";
             }
             else if (type == 1) {

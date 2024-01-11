@@ -17,7 +17,7 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
-bool must_return = false, branch = false, func_is_void = false, has_left = false, global = false, need_load = true, as_para = false;
+bool must_return = false, branch = false, has_left = false, global = false, need_load = true, as_para = false;
 int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt, loc, depth, func_r_cnt;
 std::string kstr, last_br, true_block_name, false_block_name, current_func;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;

@@ -7,52 +7,381 @@ decl @putarray(i32, *i32)
 decl @starttime()
 decl @stoptime()
 
-fun @main(): i32 {
+global @size = alloc [i32, 10], zeroinit
+
+
+global @to = alloc [[i32, 10], 10], zeroinit
+
+
+global @cap = alloc [[i32, 10], 10], zeroinit
+
+
+global @rev = alloc [[i32, 10], 10], zeroinit
+
+
+global @used = alloc [i32, 10], zeroinit
+
+
+fun @my_memset(@arr_p: *i32, @val_p: i32, @n_p: i32) {
 %entry:
-    @arr_1 = alloc [i32, 100]
+    @n_1 = alloc i32
+    store @n_p, @n_1
+    @val_1 = alloc i32
+    store @val_p, @val_1
+    %arr = alloc *i32
+    store @arr_p, %arr
+    @arr_1 = load %arr
     @i_1 = alloc i32
     store 0, @i_1
-    @sum_1 = alloc i32
-    store 0, @sum_1
     jump %while_entry_0
 
 %while_entry_0:
-    %0 = call @getint()
-    br %0, %while_body_0, %end_0
+    %0 = load @i_1
+    %1 = load @n_1
+    %2 = lt %0, %1
+    br %2, %while_body_0, %end_0
 
 %while_body_0:
-    %1 = call @getint()
-    %2 = load @i_1
-    %3 = getelemptr @arr_1, %2
-    store %1, %3
-    %5 = load @i_1
-    %6 = add %5, 1
-    store %6, @i_1
+    %3 = load @val_1
+    %4 = load @i_1
+    %5 = getptr @arr_1, %4
+    store %3, %5
+    %7 = load @i_1
+    %8 = add %7, 1
+    store %8, @i_1
     jump %while_entry_0
 
 %end_0:
-    jump %while_entry_1
+    ret
+}
 
-%while_entry_1:
-    %7 = load @i_1
-    br %7, %while_body_1, %end_1
 
-%while_body_1:
-    %8 = load @i_1
-    %9 = sub %8, 1
-    store %9, @i_1
-    %10 = load @sum_1
-    %11 = load @i_1
-    %12 = getelemptr @arr_1, %11
-    %13 = load %12
-    %14 = add %10, %13
-    store %14, @sum_1
-    jump %while_entry_1
+fun @add_node(@u_p: i32, @v_p: i32, @c_p: i32) {
+%entry:
+    @c_1 = alloc i32
+    store @c_p, @c_1
+    @v_1 = alloc i32
+    store @v_p, @v_1
+    @u_1 = alloc i32
+    store @u_p, @u_1
+    %9 = load @v_1
+    %10 = load @u_1
+    %11 = getelemptr @to, %10
+    %12 = load @u_1
+    %13 = getelemptr @size, %12
+    %14 = load %13
+    %15 = getelemptr %11, %14
+    store %9, %15
+    %17 = load @c_1
+    %18 = load @u_1
+    %19 = getelemptr @cap, %18
+    %20 = load @u_1
+    %21 = getelemptr @size, %20
+    %22 = load %21
+    %23 = getelemptr %19, %22
+    store %17, %23
+    %25 = load @v_1
+    %26 = getelemptr @size, %25
+    %27 = load %26
+    %28 = load @u_1
+    %29 = getelemptr @rev, %28
+    %30 = load @u_1
+    %31 = getelemptr @size, %30
+    %32 = load %31
+    %33 = getelemptr %29, %32
+    store %27, %33
+    %35 = load @u_1
+    %36 = load @v_1
+    %37 = getelemptr @to, %36
+    %38 = load @v_1
+    %39 = getelemptr @size, %38
+    %40 = load %39
+    %41 = getelemptr %37, %40
+    store %35, %41
+    %43 = load @v_1
+    %44 = getelemptr @cap, %43
+    %45 = load @v_1
+    %46 = getelemptr @size, %45
+    %47 = load %46
+    %48 = getelemptr %44, %47
+    store 0, %48
+    %50 = load @u_1
+    %51 = getelemptr @size, %50
+    %52 = load %51
+    %53 = load @v_1
+    %54 = getelemptr @rev, %53
+    %55 = load @v_1
+    %56 = getelemptr @size, %55
+    %57 = load %56
+    %58 = getelemptr %54, %57
+    store %52, %58
+    %60 = load @u_1
+    %61 = getelemptr @size, %60
+    %62 = load %61
+    %63 = add %62, 1
+    %64 = load @u_1
+    %65 = getelemptr @size, %64
+    store %63, %65
+    %67 = load @v_1
+    %68 = getelemptr @size, %67
+    %69 = load %68
+    %70 = add %69, 1
+    %71 = load @v_1
+    %72 = getelemptr @size, %71
+    store %70, %72
+    ret
+}
+
+
+fun @dfs(@s_p: i32, @t_p: i32, @f_p: i32): i32 {
+%entry:
+    @f_1 = alloc i32
+    store @f_p, @f_1
+    @t_1 = alloc i32
+    store @t_p, @t_1
+    @s_1 = alloc i32
+    store @s_p, @s_1
+    %74 = load @s_1
+    %75 = load @t_1
+    %76 = eq %74, %75
+    br %76, %then_1, %end_1
+
+%then_1:
+    %77 = load @f_1
+    ret %77
 
 %end_1:
-    %15 = load @sum_1
-    %16 = mod %15, 79
-    ret %16
+    %78 = load @s_1
+    %79 = getelemptr @used, %78
+    store 1, %79
+    @i_1 = alloc i32
+    store 0, @i_1
+    jump %while_entry_2
+
+%while_entry_2:
+    %81 = load @i_1
+    %82 = load @s_1
+    %83 = getelemptr @size, %82
+    %84 = load %83
+    %85 = lt %81, %84
+    br %85, %while_body_2, %end_2
+
+%while_body_2:
+    %86 = load @s_1
+    %87 = getelemptr @to, %86
+    %88 = load @i_1
+    %89 = getelemptr %87, %88
+    %90 = load %89
+    %91 = getelemptr @used, %90
+    %92 = load %91
+    br %92, %then_3, %end_3
+
+%then_3:
+    %93 = load @i_1
+    %94 = add %93, 1
+    store %94, @i_1
+    jump %while_entry_2
+
+
+%end_3:
+    %95 = load @s_1
+    %96 = getelemptr @cap, %95
+    %97 = load @i_1
+    %98 = getelemptr %96, %97
+    %99 = load %98
+    %100 = le %99, 0
+    br %100, %then_4, %end_4
+
+%then_4:
+    %101 = load @i_1
+    %102 = add %101, 1
+    store %102, @i_1
+    jump %while_entry_2
+
+
+%end_4:
+    @min_f_4 = alloc i32
+    store 0, @min_f_4
+    %103 = load @f_1
+    %104 = load @s_1
+    %105 = getelemptr @cap, %104
+    %106 = load @i_1
+    %107 = getelemptr %105, %106
+    %108 = load %107
+    %109 = lt %103, %108
+    br %109, %then_5, %else_5
+
+%then_5:
+    %110 = load @f_1
+    store %110, @min_f_4
+    jump %end_5
+
+%else_5:
+    %111 = load @s_1
+    %112 = getelemptr @cap, %111
+    %113 = load @i_1
+    %114 = getelemptr %112, %113
+    %115 = load %114
+    store %115, @min_f_4
+    jump %end_5
+
+%end_5:
+    %116 = load @s_1
+    %117 = getelemptr @to, %116
+    %118 = load @i_1
+    %119 = getelemptr %117, %118
+    %120 = load %119
+    %121 = load @t_1
+    %122 = load @min_f_4
+    %123 = call @dfs(%120, %121, %122)
+    @d_4 = alloc i32
+    store %123, @d_4
+    %124 = load @d_4
+    %125 = gt %124, 0
+    br %125, %then_6, %end_6
+
+%then_6:
+    %126 = load @s_1
+    %127 = getelemptr @cap, %126
+    %128 = load @i_1
+    %129 = getelemptr %127, %128
+    %130 = load %129
+    %131 = load @d_4
+    %132 = sub %130, %131
+    %133 = load @s_1
+    %134 = getelemptr @cap, %133
+    %135 = load @i_1
+    %136 = getelemptr %134, %135
+    store %132, %136
+    %138 = load @s_1
+    %139 = getelemptr @to, %138
+    %140 = load @i_1
+    %141 = getelemptr %139, %140
+    %142 = load %141
+    %143 = getelemptr @cap, %142
+    %144 = load @s_1
+    %145 = getelemptr @rev, %144
+    %146 = load @i_1
+    %147 = getelemptr %145, %146
+    %148 = load %147
+    %149 = getelemptr %143, %148
+    %150 = load %149
+    %151 = load @d_4
+    %152 = add %150, %151
+    %153 = load @s_1
+    %154 = getelemptr @to, %153
+    %155 = load @i_1
+    %156 = getelemptr %154, %155
+    %157 = load %156
+    %158 = getelemptr @cap, %157
+    %159 = load @s_1
+    %160 = getelemptr @rev, %159
+    %161 = load @i_1
+    %162 = getelemptr %160, %161
+    %163 = load %162
+    %164 = getelemptr %158, %163
+    store %152, %164
+    %166 = load @d_4
+    ret %166
+
+%end_6:
+    %167 = load @i_1
+    %168 = add %167, 1
+    store %168, @i_1
+    jump %while_entry_2
+
+%end_2:
+    ret 0
+}
+
+
+fun @max_flow(@s_p: i32, @t_p: i32): i32 {
+%entry:
+    @t_1 = alloc i32
+    store @t_p, @t_1
+    @s_1 = alloc i32
+    store @s_p, @s_1
+    @flow_1 = alloc i32
+    store 0, @flow_1
+    jump %while_entry_7
+
+%while_entry_7:
+    br 1, %while_body_7, %end_7
+
+%while_body_7:
+    %169 = getelemptr @used, 0
+    call @my_memset(%169, 0, 10)
+    %170 = load @s_1
+    %171 = load @t_1
+    %172 = call @dfs(%170, %171, 1879048192)
+    @f_2 = alloc i32
+    store %172, @f_2
+    %173 = load @f_2
+    %174 = eq %173, 0
+    br %174, %then_8, %end_8
+
+%then_8:
+    %175 = load @flow_1
+    ret %175
+
+%end_8:
+    %176 = load @flow_1
+    %177 = load @f_2
+    %178 = add %176, %177
+    store %178, @flow_1
+    jump %while_entry_7
+
+%end_7:
+    ret 0
+}
+
+
+fun @main(): i32 {
+%entry:
+    @V_1 = alloc i32
+    store 0, @V_1
+    @E_1 = alloc i32
+    store 0, @E_1
+    %179 = call @getint()
+    store %179, @V_1
+    %180 = call @getint()
+    store %180, @E_1
+    %181 = getelemptr @size, 0
+    call @my_memset(%181, 0, 10)
+    jump %while_entry_9
+
+%while_entry_9:
+    %182 = load @E_1
+    %183 = gt %182, 0
+    br %183, %while_body_9, %end_9
+
+%while_body_9:
+    @u_2 = alloc i32
+    store 0, @u_2
+    @v_2 = alloc i32
+    store 0, @v_2
+    %184 = call @getint()
+    store %184, @u_2
+    %185 = call @getint()
+    store %185, @v_2
+    %186 = call @getint()
+    @c_2 = alloc i32
+    store %186, @c_2
+    %187 = load @u_2
+    %188 = load @v_2
+    %189 = load @c_2
+    call @add_node(%187, %188, %189)
+    %190 = load @E_1
+    %191 = sub %190, 1
+    store %191, @E_1
+    jump %while_entry_9
+
+%end_9:
+    %192 = load @V_1
+    %193 = call @max_flow(1, %192)
+    call @putint(%193)
+    call @putch(10)
+    ret 0
 }
 
 
