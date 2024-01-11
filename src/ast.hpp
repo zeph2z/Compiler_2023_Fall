@@ -74,13 +74,14 @@ class RestCompUnitAST : public BaseAST {
         void Generate(bool write = true) override {
             if (type == 0) {
                 FuncSymbolTable.reset(new SymbolTableNode());
-                CurrentSymbolTable.reset();
+                CurrentSymbolTable = GlobalSymbolTable;
                 level = 0;
                 last_br.clear();
                 params.clear();
                 kstr += "fun @" + pass_ident + "(";
                 if (func_f_params) func_f_params->Generate(write);
                 kstr += ")";
+                CurrentSymbolTable.reset();
 
                 if (label == "void") func_is_void = true;
                 else func_is_void = false;
