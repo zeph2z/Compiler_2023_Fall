@@ -302,7 +302,9 @@ class StmtAST : public BaseAST {
                     // br %0, %then_0, %else_0
                     true_block_name = "%then_" + std::to_string(_block_cnt);
                     false_block_name = "%else_" + std::to_string(_block_cnt);
+                    has_left = true;
                     exp->Generate(true);
+                    has_left = false;
                     branch = false;
 
                     kstr += "    br " + exp->label + ", " + "%then_" + std::to_string(_block_cnt) + ", " + "%else_" + std::to_string(_block_cnt) + "\n\n";
@@ -328,7 +330,9 @@ class StmtAST : public BaseAST {
                 else {
                     true_block_name = "%then_" + std::to_string(_block_cnt);
                     false_block_name = "%end_" + std::to_string(_block_cnt);
+                    has_left = true;
                     exp->Generate(true);
+                    has_left = false;
                     branch = false;
 
                     kstr += "    br " + exp->label + ", " + "%then_" + std::to_string(_block_cnt) + ", " + "%end_" + std::to_string(_block_cnt) + "\n\n";
@@ -350,7 +354,9 @@ class StmtAST : public BaseAST {
                 true_block_name = "%while_body_" + std::to_string(_block_cnt);
                 false_block_name = "%end_" + std::to_string(_block_cnt);
                 branch = true;
+                has_left = true;
                 exp->Generate(true);
+                has_left = false;
                 branch = false;
                 kstr += "    br " + exp->label + ", " + "%while_body_" + std::to_string(_block_cnt) + ", " + "%end_" + std::to_string(_block_cnt) + "\n\n";
             
