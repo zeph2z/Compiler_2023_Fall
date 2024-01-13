@@ -18,7 +18,7 @@ extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void raw2riscv(koopa_raw_program_t &raw, string &str);
 
 bool must_return = false, branch = false, has_left = false, global = false, need_load = true, as_para = false;
-int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, array_cnt, loc, depth, func_r_cnt;
+int cnt = 0, level = 0, block_cnt = 0, logic_cnt = 0, raw_cnt = 0, array_cnt, loc, depth, func_r_cnt;
 std::string kstr, last_br, true_block_name, false_block_name, current_func;
 std::shared_ptr<SymbolTableNode> CurrentSymbolTable, FuncSymbolTable, GlobalSymbolTable;
 std::unordered_map<std::string, SymbolInfo> FuncTable;
@@ -105,22 +105,13 @@ int main(int argc, const char *argv[]) {
   decl_lib_func();
 
   ast->Generate();
-  for (const auto &kv : GlobalSymbolTable->table) {
-    auto &info = kv.second;
-    cout << info << endl;
-  }
-  for (const auto& pair : FuncTable) {
-    std::cout << pair.first << " ";
-    for (const auto& param : pair.second.param) {
-      std::cout << param << " ";
-    }
-    std::cout << std::endl;
-  }
 
-  FILE *yyout = fopen(output, "w");
-  assert(yyout);
-  fprintf(yyout, "%s", kstr.c_str());
-  fclose(yyout);
+  if (strcmp(mode, "-koopa") == 0) {
+    FILE *yyout = fopen(output, "w");
+    assert(yyout);
+    fprintf(yyout, "%s", kstr.c_str());
+    fclose(yyout);
+  }
 
   if (strcmp(mode, "-riscv") == 0) {
     koopa_program_t program;
@@ -130,12 +121,12 @@ int main(int argc, const char *argv[]) {
     koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
     koopa_delete_program(program);
 
-    string ostr;
-    raw2riscv(raw, ostr);
+    string rstr;
+    raw2riscv(raw, rstr);
 
     FILE *rout = fopen(output, "w");
     assert(rout);
-    fprintf(rout, "%s", ostr.c_str());
+    fprintf(rout, "%s", rstr.c_str());
     fclose(rout);
 
     koopa_delete_raw_program_builder(builder);

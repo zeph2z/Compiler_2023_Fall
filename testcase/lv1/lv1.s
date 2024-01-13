@@ -1,5 +1,7 @@
-    .text
-    .globl main
+	.text
+	.globl main
 main:
-    li a0, 0
-    ret
+	addi sp, sp, -4
+	li a0, 0
+	addi sp, sp, 4
+	ret
