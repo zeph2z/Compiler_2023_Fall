@@ -1,21 +1,23 @@
-decl @getint(): i32
-decl @getch(): i32
-decl @getarray(*i32): i32
-decl @putint(i32)
-decl @putch(i32)
-decl @putarray(i32, *i32)
-decl @starttime()
-decl @stoptime()
-
-fun @main(): i32 {
-%entry:
-    @x_1 = alloc i32
-    store 10, @x_1
-    %0 = load @x_1
-    %1 = add %0, 1
-    store %1, @x_1
-    %2 = load @x_1
-    ret %2
-}
-
-
+	.text
+	.globl main
+main:
+	addi sp, sp, -256
+	li t0, 0
+	sw t0, 0(sp)
+	li t0, 1
+	sw t0, 0(sp)
+	li t0, 0
+	sw t0, 4(sp)
+	lw t0, 0(sp)
+	sw t0, 8(sp)
+	lw t0, 8(sp)
+	li t1, 1
+	add t2, t0, t1
+	sw t2, 12(sp)
+	lw t0, 12(sp)
+	sw t0, 4(sp)
+	lw t0, 4(sp)
+	sw t0, 16(sp)
+	lw a0, 16(sp)
+	addi sp, sp, 256
+	ret

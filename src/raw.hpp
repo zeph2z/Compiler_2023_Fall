@@ -197,8 +197,35 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         }
                         break;
                     }
+                    case KOOPA_RVT_LOAD: {
+                        if (reg_table.find(value->kind.data.load.src) != reg_table.end()) {
+                            str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.load.src]) + "(sp)\n";
+                        }
+                        str += "\tsw t0, " + std::to_string(stack_size) + "(sp)\n";
+                        reg_table[value] = stack_size;
+                        stack_size += 4;
+                        break;
+                    }
+                    case KOOPA_RVT_STORE: {
+                        if (value->kind.data.store.value->kind.tag == KOOPA_RVT_INTEGER) {
+                            str += "\tli t0, " + std::to_string(value->kind.data.store.value->kind.data.integer.value) + "\n";
+                        }
+                        else {
+                            if (reg_table.find(value->kind.data.store.value) != reg_table.end()) {
+                                str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.store.value]) + "(sp)\n";
+                            }
+                        }
+                        if (reg_table.find(value->kind.data.store.dest) != reg_table.end()) {
+                            str += "\tsw t0, " + std::to_string(reg_table[value->kind.data.store.dest]) + "(sp)\n";
+                        }
+                        else {
+                            str += "\tsw t0, " + std::to_string(stack_size) + "(sp)\n";
+                            reg_table[value->kind.data.store.dest] = stack_size;
+                            stack_size += 4;
+                        }
+                        break;
+                    }
                 }
-
             }
         }
         str += "\n";
