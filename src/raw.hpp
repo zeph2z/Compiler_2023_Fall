@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <iostream>
 #include <unordered_map>
 #include <cassert>
 #include "koopa.h"
@@ -41,11 +42,7 @@ int get_stack_size(koopa_raw_function_t &func) {
     return stack_size;
 }
 
-void visit(koopa_raw_value_t &value, std::string &str, int stack_size) {
-}
-
 void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
-
     for (size_t i = 0; i < raw.funcs.len; ++i) {
         assert(raw.funcs.kind == KOOPA_RSIK_FUNCTION);
         koopa_raw_function_t func = (koopa_raw_function_t) raw.funcs.buffer[i];
@@ -61,7 +58,8 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
         for (size_t j = 0; j < func->bbs.len; ++j) {
             assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
             koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t) func->bbs.buffer[j];
-        
+            if (j != 0) str += "\n" + get_name(bb->name) + ":\n";
+
             for (size_t k = 0; k < bb->insts.len; ++k) {
                 koopa_raw_value_t value = (koopa_raw_value_t) bb->insts.buffer[k];
 
@@ -223,6 +221,27 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             reg_table[value->kind.data.store.dest] = stack_size;
                             stack_size += 4;
                         }
+                        break;
+                    }
+                    case KOOPA_RVT_BRANCH: {
+                        koopa_raw_value_t cond = value->kind.data.branch.cond;
+                        const char* true_bb = value->kind.data.branch.true_bb->name;
+                        const char* false_bb = value->kind.data.branch.false_bb->name;
+                        if (cond->kind.tag == KOOPA_RVT_INTEGER) {
+                            int32_t int_val = cond->kind.data.integer.value;
+                            str += "\tli t0, " + std::to_string(int_val) + "\n";
+                        }
+                        else {
+                            if (reg_table.find(cond) != reg_table.end())
+                                str += "\tlw t0, " + std::to_string(reg_table[cond]) + "(sp)\n";
+                        }
+                        str += "\tbnez t0, " + get_name(true_bb) + "\n";
+                        str += "\tj " + get_name(false_bb) + "\n";
+                        break;
+                    }
+                    case KOOPA_RVT_JUMP: {
+                        const char* bb = value->kind.data.jump.target->name;
+                        str += "\tj " + get_name(bb) + "\n";
                         break;
                     }
                 }

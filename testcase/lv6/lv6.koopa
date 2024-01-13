@@ -1,105 +1,32 @@
+decl @getint(): i32
+decl @getch(): i32
+decl @getarray(*i32): i32
+decl @putint(i32)
+decl @putch(i32)
+decl @putarray(i32, *i32)
+decl @starttime()
+decl @stoptime()
+
 fun @main(): i32 {
 %entry:
-    %0 = ne 0, 1
-    %1 = ne 0, 2
-    %2 = ne 0, 3
-    %3 = and %1, %2
-    %4 = ne 0, %3
-    %5 = or %0, %4
     @a_1 = alloc i32
-    store %5, @a_1
-    %6 = ne 0, 0
-    %7 = ne 0, 1
-    %8 = and %6, %7
-    %9 = ne 0, %8
-    %10 = ne 0, 0
-    %11 = or %9, %10
-    @b_1 = alloc i32
-    store %11, @b_1
-    %12 = ne 0, 1
-    %13 = ne 0, 0
-    %14 = and %12, %13
-    %15 = ne 0, %14
-    %16 = ne 0, 1
-    %17 = or %15, %16
-    %18 = mul %17, 4
-    @c_1 = alloc i32
-    store %18, @c_1
-    @d_1 = alloc i32
-    store 5, @d_1
-    %19 = load @a_1
-    %20 = eq %19, 1
-    %21 = ne 0, %20
-    br %21, %then_0, %logic_false_1
-
-%logic_false_1:
-    %22 = load @a_1
-    %23 = eq %22, 2
-    %24 = ne 0, %23
-    br %24, %then_0, %end_0
+    store 2, @a_1
+    %0 = load @a_1
+    br %0, %then_0, %else_0
 
 %then_0:
-
+    %1 = load @a_1
+    %2 = add %1, 1
+    store %2, @a_1
     jump %end_0
 
+%else_0:
+    store 0, @a_1
+    jump %end_0
 
 %end_0:
-    %25 = load @b_1
-    %26 = eq %25, 0
-    %27 = ne 0, %26
-    br %27, %then_2, %logic_false_3
-
-%logic_false_3:
-    %28 = load @b_1
-    %29 = eq %28, 1
-    %30 = ne 0, %29
-    br %30, %then_2, %else_2
-
-%then_2:
-    %31 = load @d_1
-    %32 = add %31, 1
-    store %32, @d_1
-    jump %end_2
-
-%else_2:
-
-    jump %end_2
-
-%end_2:
-    %33 = load @a_1
-    %34 = ne 0, %33
-    br %34, %logic_true_5, %end_4
-
-%logic_true_5:
-    %35 = load @b_1
-    %36 = ne 0, %35
-    %37 = ne 0, %36
-    br %37, %then_4, %logic_false_6
-
-%logic_false_6:
-    %38 = load @c_1
-    %39 = ne 0, %38
-    br %39, %logic_true_7, %end_4
-
-%logic_true_7:
-    %40 = load @d_1
-    %41 = ne 0, %40
-    %42 = ne 0, %41
-    br %42, %then_4, %end_4
-
-%then_4:
-    %43 = load @d_1
-    %44 = add %43, 1
-    store %44, @d_1
-    jump %end_4
-
-
-%end_4:
-    %45 = load @d_1
-    %46 = ne 0, %45
-    %47 = load @c_1
-    %48 = eq %47, 0
-    %49 = ne 0, %48
-    %50 = or %46, %49
-    ret %50
+    %3 = load @a_1
+    ret %3
 }
+
+
