@@ -893,7 +893,8 @@ class ConstDefAST : public BaseAST {
                     loc = 0;
                     current_ptr.push("@" + info.name);
                     array_generate_loc(0);
-                    current_ptr.pop();                }
+                    current_ptr.pop();                
+                    }
                 else {
                     SymbolInfo info;
                     info.type = str;

@@ -11,6 +11,7 @@ extern int raw_cnt;
 std::string reg_name[16] = {"t0", "t1", "t2", "t3", "t4", "t5", "t6", "x0",
                             "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"};
 std::unordered_map<koopa_raw_value_t, std::pair<int, int>> reg_table;
+std::vector<std::string> globl_vars;
 
 std::string get_name(const char* s) {
     std::string str = "";
@@ -22,7 +23,26 @@ std::string get_name(const char* s) {
     return str;
 }
 
+void visit(koopa_raw_value_t &value, std::string reg, std::string &str) {
+    if (value->kind.tag == KOOPA_RVT_INTEGER) {
+        str += "\tli " + reg + ", " + std::to_string(value->kind.data.integer.value) + "\n";
+        return;
+    }
+    if (reg_table.find(value) != reg_table.end()) {
+        str += "\tlw " + reg + ", " + std::to_string(reg_table[value].first) + "(sp)\n";
+        return;
+    }
+    auto it = globl_vars.begin();
+    for (; it != globl_vars.end() && get_name(value->name) != *it; ++it);
+    if (it != globl_vars.end()) {
+        str += "\tlw " + reg + ", " + get_name(value->name) + "\n";
+        return;
+    }
+}
+
 void get_stack_size(koopa_raw_function_t &func, int &stack_size, int &S, int &R, int &A) {
+    S = func->params.len * 4;
+
     for (size_t j = 0; j < func->bbs.len; ++j) {
         assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
         koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t) func->bbs.buffer[j];
@@ -56,6 +76,14 @@ void get_stack_size(koopa_raw_function_t &func, int &stack_size, int &S, int &R,
                     R = 4;
                     koopa_raw_slice_t args = value->kind.data.call.args;
                     A = A >= ((int32_t)args.len - 8) ? A : ((int32_t)args.len - 8);
+
+                    if (value->ty->tag != KOOPA_RTT_UNIT) {
+                        if (reg_table.find(value) == reg_table.end()) {
+                            reg_table[value] = std::pair<int, int>(1, 0);
+                            S += 4;
+                        }
+                    }
+
                     break;
                 }
                 default: break;
@@ -68,6 +96,35 @@ void get_stack_size(koopa_raw_function_t &func, int &stack_size, int &S, int &R,
 }
 
 void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
+
+    globl_vars.clear();
+
+    for (size_t i = 0; i < raw.values.len; ++i) {
+        assert(raw.values.kind == KOOPA_RSIK_VALUE);
+        koopa_raw_value_t value = (koopa_raw_value_t) raw.values.buffer[i];
+        globl_vars.push_back(get_name(value->name));
+        
+        if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC) {
+            koopa_raw_value_t init = value->kind.data.global_alloc.init;
+
+            str += "\t.data\n";
+            str += "\t.globl " + get_name(value->name) + "\n" + get_name(value->name) + ":\n";
+
+            switch (init->kind.tag) {
+                case KOOPA_RVT_INTEGER: {
+                    str += "\t.word " + std::to_string(init->kind.data.integer.value) + "\n";
+                    break;
+                }
+                case KOOPA_RVT_ZERO_INIT: {
+                    str += "\t.zero 4\n";
+                    break;
+                }
+                default: break;
+            }
+        }
+        str += "\n";
+    }
+
     for (size_t i = 0; i < raw.funcs.len; ++i) {
         assert(raw.funcs.kind == KOOPA_RSIK_FUNCTION);
         koopa_raw_function_t func = (koopa_raw_function_t) raw.funcs.buffer[i];
@@ -81,14 +138,15 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
         reg_table.clear();
         int offset = A;
 
+        if (stack_size) str += "\taddi sp, sp, -" + std::to_string(stack_size) + "\n";
+        if (R) str += "\tsw ra, " + std::to_string(stack_size - R) + "(sp)\n";
+        
         for (size_t j = 0; j < func->params.len; ++j) {
             assert(func->params.kind == KOOPA_RSIK_VALUE);
             koopa_raw_value_t param = (koopa_raw_value_t) func->params.buffer[j];
-            reg_table[param] = std::pair<int, int>(offset, 8 + j);
+            if (j < 8) reg_table[param] = std::pair<int, int>(offset, 8 + j);
+            else reg_table[param] = std::pair<int, int>(stack_size + 4 * (j - 8), 8 + j);
         }
-
-        if (stack_size) str += "\taddi sp, sp, -" + std::to_string(stack_size) + "\n";
-        if (R) str += "\tsw ra, " + std::to_string(stack_size - R) + "(sp)\n";
 
         for (size_t j = 0; j < func->bbs.len; ++j) {
             assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
@@ -102,16 +160,7 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                 switch (value->kind.tag) {
                     case KOOPA_RVT_RETURN: {
                         koopa_raw_value_t ret_value = value->kind.data.ret.value;
-                        if (ret_value) {
-                            if (ret_value->kind.tag == KOOPA_RVT_INTEGER) {
-                                int32_t int_val = ret_value->kind.data.integer.value;
-                                str += "\tli a0, " + std::to_string(int_val) + "\n";
-                            }
-                            else {
-                                if (reg_table.find(ret_value) != reg_table.end())
-                                    str += "\tlw a0, " + std::to_string(reg_table[ret_value].first) + "(sp)\n";
-                            }
-                        }
+                        if (ret_value) visit(ret_value, "a0", str);
                         if (R) str += "\tlw ra, " + std::to_string(stack_size - R) + "(sp)\n";
                         if (stack_size) str += "\taddi sp, sp, " + std::to_string(stack_size) + "\n";
                         str += "\tret\n";
@@ -121,20 +170,8 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         koopa_raw_binary_op_t op = value->kind.data.binary.op;
                         koopa_raw_value_t lhs = value->kind.data.binary.lhs;
                         koopa_raw_value_t rhs = value->kind.data.binary.rhs;
-                        if (lhs->kind.tag == KOOPA_RVT_INTEGER) {
-                            str += "\tli t0, " + std::to_string(lhs->kind.data.integer.value) + "\n";                            
-                        }
-                        else {
-                            if (reg_table.find(lhs) != reg_table.end())
-                                str += "\tlw t0, " + std::to_string(reg_table[lhs].first) + "(sp)\n";
-                        }
-                        if (rhs->kind.tag == KOOPA_RVT_INTEGER) {
-                            str += "\tli t1, " + std::to_string(rhs->kind.data.integer.value) + "\n";
-                        }
-                        else {
-                            if (reg_table.find(rhs) != reg_table.end())
-                                str += "\tlw t1, " + std::to_string(reg_table[rhs].first) + "(sp)\n";
-                        }
+                        visit(lhs, "t0", str);
+                        visit(rhs, "t1", str);
                         switch (op) {
                             case KOOPA_RBO_ADD: {
                                 str += "\tadd t2, t0, t1\n";
@@ -236,6 +273,11 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         break;
                     }
                     case KOOPA_RVT_LOAD: {
+                        auto it = globl_vars.begin();
+                        for (; it != globl_vars.end() && get_name(value->kind.data.load.src->name) != *it; ++it);
+                        if (it != globl_vars.end()) {
+                            str += "\tlw t0, " + get_name(value->kind.data.load.src->name) + "\n";
+                        }
                         if (reg_table.find(value->kind.data.load.src) != reg_table.end()) {
                             str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.load.src].first) + "(sp)\n";
                         }
@@ -249,17 +291,34 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             str += "\tli t0, " + std::to_string(value->kind.data.store.value->kind.data.integer.value) + "\n";
                         }
                         else {
-                            if (reg_table.find(value->kind.data.store.value) != reg_table.end() && reg_table[value->kind.data.store.value].second == 0) {
+                            if (reg_table.find(value->kind.data.store.value) != reg_table.end() && (reg_table[value->kind.data.store.value].second == 0 || reg_table[value->kind.data.store.value].second > 15)) {
                                 str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.store.value].first) + "(sp)\n";
+                                reg_table[value->kind.data.store.value].second = 0;
+                            }
+                            else {
+                                auto it = globl_vars.begin();    
+                                for (; it != globl_vars.end() && get_name(value->kind.data.store.value->name) != *it; ++it);
+                                if (it == globl_vars.end()) {
+                                }
+                                else str += "\tlw t0, " + get_name(value->kind.data.store.value->name) + "\n";
                             }
                         }
-                        if (reg_table.find(value->kind.data.store.dest) != reg_table.end()) {
-                            str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(reg_table[value->kind.data.store.dest].first) + "(sp)\n";
+
+                        auto it = globl_vars.begin();
+                        for (; it != globl_vars.end() && get_name(value->kind.data.store.dest->name) != *it; ++it);
+                        if (it == globl_vars.end()) {
+                            if (reg_table.find(value->kind.data.store.dest) != reg_table.end()) {
+                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(reg_table[value->kind.data.store.dest].first) + "(sp)\n";
+                            }
+                            else {
+                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(offset) + "(sp)\n";
+                                reg_table[value->kind.data.store.dest] = std::pair<int, int>(offset, 0);
+                                offset += 4;
+                            }
                         }
                         else {
-                            str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(offset) + "(sp)\n";
-                            reg_table[value->kind.data.store.dest] = std::pair<int, int>(offset, 0);
-                            offset += 4;
+                            str += "\tla t1, " + get_name(value->kind.data.store.dest->name) + "\n";
+                            str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", 0(t1)\n";
                         }
                         break;
                     }
@@ -290,13 +349,10 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         for (size_t l = 0; l < call.args.len; ++l) {
                             assert(call.args.kind == KOOPA_RSIK_VALUE);
                             koopa_raw_value_t arg = (koopa_raw_value_t) call.args.buffer[l];
-
-                            if (arg->kind.tag == KOOPA_RVT_INTEGER) {
-                                str += "\tli " + reg_name[l + 8] + ", " + std::to_string(arg->kind.data.integer.value) + "\n";
-                            }
+                            if (l < 8) visit(arg, reg_name[l + 8], str);
                             else {
-                                if (reg_table.find(arg) != reg_table.end())
-                                    str += "\tlw " + reg_name[l + 8] + ", " + std::to_string(reg_table[arg].first) + "(sp)\n";
+                                visit(arg, "t0", str);
+                                str += "\tsw t0, " + std::to_string(l * 4 - 32) + "(sp)\n";
                             }
                         }
 
