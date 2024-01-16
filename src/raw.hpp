@@ -95,6 +95,30 @@ void get_stack_size(koopa_raw_function_t &func, int &stack_size, int &S, int &R,
     stack_size = (stack_size + 15) / 16 * 16;
 }
 
+void global_init(koopa_raw_value_t &elems, std::string &str) {
+    std::cout << elems->ty->tag << " " << elems->kind.tag << std::endl;
+    if (elems->ty->tag == KOOPA_RTT_INT32) {
+        if (elems->kind.tag == KOOPA_RVT_INTEGER) {
+            str += "\t.word " + std::to_string(elems->kind.data.integer.value) + "\n";
+        }
+        else if (elems->kind.tag == KOOPA_RVT_ZERO_INIT) {
+            str += "\t.zero 4\n";
+        }
+        return;
+    }
+    
+    if (elems->ty->tag == KOOPA_RTT_ARRAY) {
+        // init should be an array
+        koopa_raw_slice_t items = elems->kind.data.aggregate.elems;
+
+        for (int i = 0; i < items.len; ++i) {
+            koopa_raw_value_t elem = (koopa_raw_value_t) items.buffer[i];
+            global_init(elem, str);
+        }
+    }
+
+}
+
 void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
 
     globl_vars.clear();
@@ -104,24 +128,34 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
         koopa_raw_value_t value = (koopa_raw_value_t) raw.values.buffer[i];
         globl_vars.push_back(get_name(value->name));
         
-        if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC) {
-            koopa_raw_value_t init = value->kind.data.global_alloc.init;
+        if (value->ty->tag == KOOPA_RTT_INT32) {
+            if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC) {
+                koopa_raw_value_t init = value->kind.data.global_alloc.init;
 
-            str += "\t.data\n";
-            str += "\t.globl " + get_name(value->name) + "\n" + get_name(value->name) + ":\n";
+                str += "\t.data\n";
+                str += "\t.globl " + get_name(value->name) + "\n" + get_name(value->name) + ":\n";
 
-            switch (init->kind.tag) {
-                case KOOPA_RVT_INTEGER: {
-                    str += "\t.word " + std::to_string(init->kind.data.integer.value) + "\n";
-                    break;
+                switch (init->kind.tag) {
+                    case KOOPA_RVT_INTEGER: {
+                        str += "\t.word " + std::to_string(init->kind.data.integer.value) + "\n";
+                        break;
+                    }
+                    case KOOPA_RVT_ZERO_INIT: {
+                        str += "\t.zero 4\n";
+                        break;
+                    }
+                    default: break;
                 }
-                case KOOPA_RVT_ZERO_INIT: {
-                    str += "\t.zero 4\n";
-                    break;
-                }
-                default: break;
             }
         }
+        else if (value->ty->tag == KOOPA_RTT_POINTER) {
+            str += "\t.data\n";
+            str += "\t.globl " + get_name(value->name) + "\n" + get_name(value->name) + ":\n";
+            
+            koopa_raw_value_t init = value->kind.data.global_alloc.init;
+            global_init(init, str);
+        }
+
         str += "\n";
     }
 
