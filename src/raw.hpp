@@ -12,6 +12,7 @@ std::string reg_name[16] = {"t0", "t1", "t2", "t3", "t4", "t5", "t6", "x0",
                             "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"};
 std::unordered_map<koopa_raw_value_t, std::pair<int, int>> reg_table;
 std::vector<std::string> globl_vars;
+std::unordered_map<koopa_raw_value_t, int> ptrs;
 
 std::string get_name(const char* s) {
     std::string str = "";
@@ -23,13 +24,23 @@ std::string get_name(const char* s) {
     return str;
 }
 
+int value_is_ptr(const koopa_raw_value_t &value) {
+    if (ptrs.find(value) != ptrs.end()) return ptrs[value];
+    return 0;
+}
+
 void visit(koopa_raw_value_t &value, std::string reg, std::string &str) {
     if (value->kind.tag == KOOPA_RVT_INTEGER) {
         str += "\tli " + reg + ", " + std::to_string(value->kind.data.integer.value) + "\n";
         return;
     }
     if (reg_table.find(value) != reg_table.end()) {
-        str += "\tlw " + reg + ", " + std::to_string(reg_table[value].first) + "(sp)\n";
+        str += "\tli t4, " + std::to_string(reg_table[value].first) + "\n";
+        str += "\tadd t4, t4, sp\n";
+        for (int z = 0; z < value_is_ptr(value); ++z) {
+            str += "\tlw t4, 0(t4)\n";
+        }
+        str += "\tlw " + reg + ", 0(t4)\n";
         return;
     }
     auto it = globl_vars.begin();
@@ -95,12 +106,10 @@ void get_stack_size(koopa_raw_function_t &func, int &stack_size, int &S, int &R,
                 case KOOPA_RVT_GET_ELEM_PTR: {
                     koopa_raw_value_t src = value->kind.data.get_elem_ptr.src;
                     // src should be a pointer
-                    const koopa_raw_type_kind_t *base = src->ty->data.pointer.base;
-                    // base should be an array
                     
                     if (reg_table.find(src) == reg_table.end()) {
                         reg_table[src] = std::pair<int, int>(1, 0);
-                        S += base->data.array.len * 4;
+                        S += get_array_size(src->ty);
                     }
                     if (reg_table.find(value) == reg_table.end()) {
                         reg_table[value] = std::pair<int, int>(1, 0);
@@ -146,9 +155,19 @@ void global_init(koopa_raw_value_t &elems, int size, std::string &str) {
 
 }
 
+void addi_sp(int size, bool add, std::string &str) {
+    std::string op = add ? "" : "-";
+    while (size >= 2047) {
+        str += "\taddi sp, sp, " + op + "2047\n";
+        size -= 2047;
+    }
+    if (size) str += "\taddi sp, sp, " + op + std::to_string(size) + "\n";
+}
+
 void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
 
     globl_vars.clear();
+    ptrs.clear();
 
     for (size_t i = 0; i < raw.values.len; ++i) {
         assert(raw.values.kind == KOOPA_RSIK_VALUE);
@@ -201,8 +220,12 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
 
         std::cout << stack_size << " " << S << " " << R << " " << A << std::endl;
 
-        if (stack_size) str += "\taddi sp, sp, -" + std::to_string(stack_size) + "\n";
-        if (R) str += "\tsw ra, " + std::to_string(stack_size - R) + "(sp)\n";
+        addi_sp(stack_size, false, str);
+        if (R) {
+            str += "\tli t4, " + std::to_string(stack_size - R) + "\n";
+            str += "\tadd t4, t4, sp\n";
+            str += "\tsw ra, 0(t4)\n";
+        }
         
         for (size_t j = 0; j < func->params.len; ++j) {
             assert(func->params.kind == KOOPA_RSIK_VALUE);
@@ -224,8 +247,12 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                     case KOOPA_RVT_RETURN: {
                         koopa_raw_value_t ret_value = value->kind.data.ret.value;
                         if (ret_value) visit(ret_value, "a0", str);
-                        if (R) str += "\tlw ra, " + std::to_string(stack_size - R) + "(sp)\n";
-                        if (stack_size) str += "\taddi sp, sp, " + std::to_string(stack_size) + "\n";
+                        if (R) {
+                            str += "\tli t4, " + std::to_string(stack_size - R) + "\n";
+                            str += "\tadd t4, t4, sp\n";
+                            str += "\tlw ra, 0(t4)\n";
+                        }
+                        addi_sp(stack_size, true, str);
                         str += "\tret\n";
                         break;
                         }
@@ -238,35 +265,45 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         switch (op) {
                             case KOOPA_RBO_ADD: {
                                 str += "\tadd t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_SUB: {
                                 str += "\tsub t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_MUL: {
                                 str += "\tmul t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_DIV: {
                                 str += "\tdiv t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_MOD: {
                                 str += "\trem t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
@@ -274,7 +311,9 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             case KOOPA_RBO_EQ: {
                                 str += "\tsub t2, t0, t1\n";
                                 str += "\tseqz t3, t2\n";
-                                str += "\tsw t3, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t3, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
@@ -282,7 +321,9 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             case KOOPA_RBO_NOT_EQ: {
                                 str += "\tsub t2, t0, t1\n";
                                 str += "\tsnez t3, t2\n";
-                                str += "\tsw t3, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t3, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
@@ -290,14 +331,18 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             case KOOPA_RBO_GE: {
                                 str += "\tslt t2, t0, t1\n";
                                 str += "\tseqz t3, t2\n";
-                                str += "\tsw t3, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t3, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_GT: {
                                 str += "\tslt t2, t1, t0\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
@@ -305,28 +350,36 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             case KOOPA_RBO_LE: {
                                 str += "\tslt t2, t1, t0\n";
                                 str += "\tseqz t3, t2\n";
-                                str += "\tsw t3, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t3, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_LT: {
                                 str += "\tslt t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                                 break;
                             }
                             case KOOPA_RBO_AND: {
                                 str += "\tand t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;                                
                                 break;
                             }
                             case KOOPA_RBO_OR: {
                                 str += "\tor t2, t0, t1\n";
-                                str += "\tsw t2, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t2, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;                                
                                 break;
@@ -337,7 +390,10 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                     }
                     case KOOPA_RVT_LOAD: {
                         if (reg_table.find(value->kind.data.load.src) != reg_table.end()) {
-                            str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.load.src].first) + "(sp)\n";
+                            str += "\tli t4, " + std::to_string(reg_table[value->kind.data.load.src].first) + "\n";
+                            str += "\tadd t4, t4, sp\n";
+                            for (int z = 0; z < value_is_ptr(value->kind.data.load.src); ++z) str += "\tlw t4, 0(t4)\n";
+                            str += "\tlw t0, 0(t4)\n";
                         }
                         else {
                             auto it = globl_vars.begin();
@@ -346,7 +402,9 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                                 str += "\tlw t0, " + get_name(value->kind.data.load.src->name) + "\n";
                             }
                         }
-                        str += "\tsw t0, " + std::to_string(offset) + "(sp)\n";
+                        str += "\tli t4, " + std::to_string(offset) + "\n";
+                        str += "\tadd t4, t4, sp\n";
+                        str += "\tsw t0, 0(t4)\n";
                         reg_table[value] = std::pair<int, int>(offset, 0);
                         offset += 4;
                         break;
@@ -354,29 +412,61 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                     case KOOPA_RVT_STORE: {
                         if (value->kind.data.store.value->kind.tag == KOOPA_RVT_INTEGER) {
                             str += "\tli t0, " + std::to_string(value->kind.data.store.value->kind.data.integer.value) + "\n";
+                            if (reg_table.find(value->kind.data.store.dest) != reg_table.end()) {
+                                str += "\tli t4, " + std::to_string(reg_table[value->kind.data.store.dest].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(value->kind.data.store.dest); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tsw t0, 0(t4)\n";
+                            }
+                            else {
+                                auto it = globl_vars.begin();
+                                for (; it != globl_vars.end() && get_name(value->kind.data.store.dest->name) != *it; ++it);
+                                if (it != globl_vars.end()) {
+                                    str += "\tla t1, " + get_name(value->kind.data.store.dest->name) + "\n";
+                                    str += "\tsw t0, 0(t1)\n";
+                                }
+                                else {
+                                    str += "\tli t4, " + std::to_string(offset) + "\n";
+                                    str += "\tadd t4, t4, sp\n";
+                                    str += "\tsw t0, 0(t4)\n";
+                                    reg_table[value->kind.data.store.dest] = std::pair<int, int>(offset, 0);
+                                    offset += 4;
+                                }
+                            }
+                            break;
                         }
                         else {
                             if (reg_table.find(value->kind.data.store.value) != reg_table.end() && (reg_table[value->kind.data.store.value].second == 0 || reg_table[value->kind.data.store.value].second > 15)) {
-                                str += "\tlw t0, " + std::to_string(reg_table[value->kind.data.store.value].first) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(reg_table[value->kind.data.store.value].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(value->kind.data.store.value); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tlw t0, 0(t4)\n";
                                 reg_table[value->kind.data.store.value].second = 0;
                             }
                             else {
                                 auto it = globl_vars.begin();    
                                 for (; it != globl_vars.end() && get_name(value->kind.data.store.value->name) != *it; ++it);
-                                if (it == globl_vars.end()) {
+                                if (it != globl_vars.end()) {
+                                    str += "\tla t1, " + get_name(value->kind.data.store.value->name) + "\n";
+                                    str += "\tlw t0, 0(t1)\n";
                                 }
-                                else str += "\tlw t0, " + get_name(value->kind.data.store.value->name) + "\n";
                             }
                         }
 
                         auto it = globl_vars.begin();
-                        for (; it != globl_vars.end() && get_name(value->kind.data.store.dest->name) != *it; ++it);
+                        for (; it != globl_vars.end() && (bool)value->kind.data.store.dest->name && get_name(value->kind.data.store.dest->name) != *it; ++it);
                         if (it == globl_vars.end()) {
                             if (reg_table.find(value->kind.data.store.dest) != reg_table.end()) {
-                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(reg_table[value->kind.data.store.dest].first) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(reg_table[value->kind.data.store.dest].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(value->kind.data.store.dest); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", 0(t4)\n";
                             }
                             else {
-                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(reg_table[value->kind.data.store.dest].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(value->kind.data.store.dest); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tsw " + reg_name[reg_table[value->kind.data.store.value].second] + ", 0(t4)\n";
                                 reg_table[value->kind.data.store.dest] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                             }
@@ -396,8 +486,12 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             str += "\tli t0, " + std::to_string(int_val) + "\n";
                         }
                         else {
-                            if (reg_table.find(cond) != reg_table.end())
-                                str += "\tlw t0, " + std::to_string(reg_table[cond].first) + "(sp)\n";
+                            if (reg_table.find(cond) != reg_table.end()) {
+                                str += "\tli t4, " + std::to_string(reg_table[cond].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(cond); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tlw t0, 0(t4)\n";
+                            }
                         }
                         str += "\tbnez t0, " + get_name(true_bb) + "\n";
                         str += "\tj " + get_name(false_bb) + "\n";
@@ -417,7 +511,9 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             if (l < 8) visit(arg, reg_name[l + 8], str);
                             else {
                                 visit(arg, "t0", str);
-                                str += "\tsw t0, " + std::to_string(l * 4 - 32) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(l * 4 - 32) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw t0, 0(t4)\n";
                             }
                         }
 
@@ -425,10 +521,15 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
 
                         if (value->ty->tag != KOOPA_RTT_UNIT) {
                             if (reg_table.find(value) != reg_table.end()) {
-                                str += "\tsw a0, " + std::to_string(reg_table[value].first) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(reg_table[value].first) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                for (int z = 0; z < value_is_ptr(value); ++z) str += "\tlw t4, 0(t4)\n";
+                                str += "\tsw a0, 0(t4)\n";
                             }
                             else {
-                                str += "\tsw a0, " + std::to_string(offset) + "(sp)\n";
+                                str += "\tli t4, " + std::to_string(offset) + "\n";
+                                str += "\tadd t4, t4, sp\n";
+                                str += "\tsw a0, 0(t4)\n";
                                 reg_table[value] = std::pair<int, int>(offset, 0);
                                 offset += 4;
                             }
@@ -439,16 +540,18 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                         koopa_raw_value_t index = value->kind.data.get_elem_ptr.index;
                         // src should be a pointer
                         size_t len = get_array_size(src->ty);
+                        size_t next_len;
+                        if (src->ty->data.pointer.base->data.array.base->tag == KOOPA_RTT_ARRAY) next_len = get_array_size(src->ty->data.pointer.base->data.array.base);
+                        else next_len = 4;
 
                         visit(index, "t1", str);
-                        str += "\tli t2, 2\n";
-                        str += "\tsll t1, t1, t2\n";
+                        str += "\tli t2, " + std::to_string(next_len) + "\n";
+                        str += "\tmul t1, t1, t2\n";
 
                         if (reg_table.find(src) != reg_table.end()) {
                             str += "\tli t2, " + std::to_string(reg_table[src].first) + "\n";
                             str += "\tadd t1, t1, t2\n";
                             str += "\tadd t1, t1, sp\n";
-                            str += "\tlw t0, 0(t1)\n";
                         }
                         else {
                             auto it = globl_vars.begin();
@@ -456,20 +559,22 @@ void raw2riscv(koopa_raw_program_t &raw, std::string &str) {
                             if (it != globl_vars.end()) {
                                 str += "\tla t2, " + get_name(src->name) + "\n";
                                 str += "\tadd t1, t1, t2\n";
-                                str += "\tlw t0, 0(t1)\n";
                             }
                             else {
                                 str += "\tli t2, " + std::to_string(offset) + "\n";
                                 str += "\tadd t1, t1, t2\n";
                                 str += "\tadd t1, t1, sp\n";
-                                str += "\tlw t0, 0(t1)\n";
                                 reg_table[src] = std::pair<int, int>(offset, 0);
-                                offset += len * 4;
+                                offset += len;
                             }
                         }
-
-                        str += "\tsw t0, " + std::to_string(offset) + "(sp)\n";
+                        str += "\tli t4, " + std::to_string(offset) + "\n";
+                        str += "\tadd t4, t4, sp\n";
+                        // t1 is the absolute address of the element
+                        str += "\tsw t1, 0(t4)\n";
                         reg_table[value] = std::pair<int, int>(offset, 0);
+                        ptrs[value] = value_is_ptr(src) + 1;
+                        std::cout << value_is_ptr(src) + 1 << std::endl;
                         offset += 4;
                         break;
                     }
