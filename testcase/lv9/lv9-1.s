@@ -1,114 +1,136 @@
 	.text
 	.globl main
 main:
-	addi sp, sp, -64
-	li t1, 0
-	li t2, 8
-	mul t1, t1, t2
-	li t2, 0
-	add t1, t1, t2
-	add t1, t1, sp
+	addi sp, sp, -80
+	li t0, 0
+	li t4, 0
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t0, 21
+	li t4, 4
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t4, 4
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 8
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t4, 8
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t1, 1
+	add t2, t0, t1
+	li t4, 12
+	add t4, t4, sp
+	sw t2, 0(t4)
+	li t4, 12
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 0
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t4, 0
+	add t4, t4, sp
+	lw t0, 0(t4)
 	li t4, 16
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t1, 0
-	li t2, 4
-	mul t1, t1, t2
-	li t2, 16
-	add t1, t1, t2
-	add t1, t1, sp
+	sw t0, 0(t4)
+	li t0, 147
+	li t4, 16
+	add t4, t4, sp
+	lw t1, 0(t4)
+	sub t2, t0, t1
 	li t4, 20
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t0, 1
+	sw t2, 0(t4)
 	li t4, 20
 	add t4, t4, sp
-	lw t4, 0(t4)
-	lw t4, 0(t4)
-	sw t0, 0(t4)
-	li t1, 1
-	li t2, 4
-	mul t1, t1, t2
-	li t2, 16
-	add t1, t1, t2
-	add t1, t1, sp
-	li t4, 24
+	lw t0, 0(t4)
+	li t4, 0
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t0, 2
-	li t4, 24
-	add t4, t4, sp
-	lw t4, 0(t4)
-	lw t4, 0(t4)
 	sw t0, 0(t4)
-	li t1, 1
-	li t2, 8
-	mul t1, t1, t2
-	li t2, 0
-	add t1, t1, t2
-	add t1, t1, sp
+	li t4, 4
+	add t4, t4, sp
+	lw t0, 0(t4)
 	li t4, 28
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t1, 0
-	li t2, 4
-	mul t1, t1, t2
-	li t2, 28
-	add t1, t1, t2
-	add t1, t1, sp
+	sw t0, 0(t4)
+	li t0, 147
+	li t4, 28
+	add t4, t4, sp
+	lw t1, 0(t4)
+	sub t2, t0, t1
 	li t4, 32
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t0, 3
+	sw t2, 0(t4)
 	li t4, 32
 	add t4, t4, sp
-	lw t4, 0(t4)
-	lw t4, 0(t4)
+	lw t0, 0(t4)
+	li t4, 0
+	add t4, t4, sp
 	sw t0, 0(t4)
-	li t1, 1
-	li t2, 4
-	mul t1, t1, t2
-	li t2, 28
-	add t1, t1, t2
-	add t1, t1, sp
 	li t4, 36
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t0, 4
-	li t4, 36
-	add t4, t4, sp
-	lw t4, 0(t4)
-	lw t4, 0(t4)
-	sw t0, 0(t4)
-	li t1, 0
-	li t2, 8
-	mul t1, t1, t2
-	li t2, 0
-	add t1, t1, t2
-	add t1, t1, sp
+	lw t0, 0(t4)
 	li t4, 40
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t1, 1
-	li t2, 4
-	mul t1, t1, t2
-	li t2, 40
-	add t1, t1, t2
-	add t1, t1, sp
-	li t4, 44
+	sw t0, 0(t4)
+	li t4, 40
 	add t4, t4, sp
-	sw t1, 0(t4)
-	li t4, 44
-	add t4, t4, sp
-	lw t4, 0(t4)
-	lw t4, 0(t4)
 	lw t0, 0(t4)
+	li t1, 1
+	mul t2, t0, t1
+	li t4, 44
+	add t4, t4, sp
+	sw t2, 0(t4)
+	li t4, 44
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t1, 1
+	mul t2, t0, t1
 	li t4, 48
+	add t4, t4, sp
+	sw t2, 0(t4)
+	li t4, 48
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t1, 1
+	mul t2, t0, t1
+	li t4, 52
+	add t4, t4, sp
+	sw t2, 0(t4)
+	li t4, 52
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 36
 	add t4, t4, sp
 	sw t0, 0(t4)
-	li t4, 48
+	li t4, 24
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 56
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t4, 36
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 60
+	add t4, t4, sp
+	sw t0, 0(t4)
+	li t4, 56
+	add t4, t4, sp
+	lw t0, 0(t4)
+	li t4, 60
+	add t4, t4, sp
+	lw t1, 0(t4)
+	add t2, t0, t1
+	li t4, 64
+	add t4, t4, sp
+	sw t2, 0(t4)
+	li t4, 64
 	add t4, t4, sp
 	lw a0, 0(t4)
-	addi sp, sp, 64
+	addi sp, sp, 80
 	ret
 
