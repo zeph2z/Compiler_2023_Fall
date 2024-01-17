@@ -170,7 +170,6 @@ class RestCompUnitAST : public BaseAST {
                     kstr += "\n";
                 }
                 if (var_def) {
-                    std::cout << 1;
                     global = true;
                     var_def->Generate(write);
                     global = false;

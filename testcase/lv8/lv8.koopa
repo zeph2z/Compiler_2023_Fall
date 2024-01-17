@@ -7,56 +7,12 @@ decl @putarray(i32, *i32)
 decl @starttime()
 decl @stoptime()
 
-global @a = alloc i32, 10
-
-
-fun @inc(): i32 {
+fun @main(@a1_p: i32, @a2_p: i32): i32 {
 %entry:
-    %0 = load @a
-    %1 = add %0, 1
-    store %1, @a
-    %2 = load @a
-    ret %2
-}
-
-
-fun @print_a() {
-%entry:
-    %3 = load @a
-    call @putint(%3)
-    call @putch(10)
-    ret
-}
-
-
-fun @main(): i32 {
-%entry:
-    @i_1 = alloc i32
-    store 0, @i_1
-    jump %while_entry_0
-
-%while_entry_0:
-    %4 = load @i_1
-    %5 = lt %4, 10
-    br %5, %while_body_0, %end_0
-
-%while_body_0:
-    %6 = call @inc()
-    @a_2 = alloc i32
-    store 1, @a_2
-    %7 = load @a_2
-    %8 = add %7, 2
-    store %8, @a_2
-    %9 = load @a_2
-    call @putint(%9)
-    call @putch(10)
-    call @print_a()
-    %10 = load @i_1
-    %11 = add %10, 1
-    store %11, @i_1
-    jump %while_entry_0
-
-%end_0:
+    @a2_1 = alloc i32
+    store @a2_p, @a2_1
+    @a1_1 = alloc i32
+    store @a1_p, @a1_1
     ret 0
 }
 
